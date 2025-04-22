@@ -1,0 +1,4033 @@
+---
+title: 'COI and Neurocognition: ABCD data cleaning and Aim1 analyses'
+author: "Lan Zhou"
+date: "26/07/2024"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '3'
+  html_notebook:
+    number_sections: yes
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+---
+
+
+# load packages
+```{r}
+library(dplyr)
+library(ggplot2)
+library(corrplot)
+library(openxlsx)
+library(lme4)
+library(lmerTest)
+```
+
+#--Read Data---
+```{r}
+df <- read.csv("D:/OneDrive/文档/ABCD study/COI and brain development/data/input/extracted_variables_filtered_baseline.csv")
+df_new1 <- read.csv("D:/OneDrive/文档/ABCD study/COI and brain development/data/input/extracted_variables_filtered_baseline_0808.csv")
+df_new2  <- read.csv("D:/OneDrive/文档/ABCD study/COI and brain development/data/input/extracted_variables_filtered_baseline_0815.csv")
+# merge the data
+df <- merge(df,df_new1,by = "src_subject_id", all.x = TRUE)
+df <- merge(df,df_new2,by = "src_subject_id", all.x = TRUE)
+
+df_site <- read.csv("D:/OneDrive/文档/ABCD study/COI and brain development/data/input/site22_baseline_followup_site_ids.csv")
+
+df_updated <- df %>%
+  left_join(df_site %>% select(src_subject_id, correct_site), by = "src_subject_id")
+
+# Step 2: Replace df$site_id_l with df_site$correct_site for the 36 subjects
+df_updated <- df_updated %>%
+  mutate(site_id_l = if_else(!is.na(correct_site), correct_site, site_id_l))
+
+# Step 3: Drop the 'correct_site' column, if no longer needed
+df <- df_updated %>%
+  select(-correct_site)
+
+df <- df[df$site_id_l != "site22",]
+
+
+df_t2 <- read.csv("D:/OneDrive/文档/ABCD study/COI and brain development/data/input/extracted_variables_filtered_2year.csv")
+ 
+df_new2_1 <- read.csv("D:/OneDrive/文档/ABCD study/COI and brain development/data/input/extracted_variables_filtered_2year_0808.csv")
+df_new2_2 <- read.csv("D:/OneDrive/文档/ABCD study/COI and brain development/data/input/extracted_variables_filtered_2year_0815.csv")
+# merge the data
+df_t2 <- merge(df_t2,df_new2_1,by = "src_subject_id", all.x = TRUE)
+df_t2 <- merge(df_t2,df_new2_2,by = "src_subject_id", all.x = TRUE)
+
+df_t2 <- df_t2 %>%
+  left_join(df_site %>% select(src_subject_id, correct_site), by = "src_subject_id")
+
+# Step 2: Replace df$site_id_l with df_site$correct_site for the 36 subjects
+df_t2 <- df_t2 %>%
+  mutate(site_id_l = if_else(!is.na(correct_site), correct_site, site_id_l))
+
+# Step 3: Drop the 'correct_site' column, if no longer needed
+df_t2 <- df_t2 %>%
+  select(-correct_site)
+
+
+df_t2 <- df_t2 %>%
+  filter(site_id_l != "site22")
+
+# Identify duplicate rows based on the "src_subject_id" variable
+duplicates <- df[duplicated(df$src_subject_id) | duplicated(df$src_subject_id, fromLast = TRUE), ]
+
+# View the duplicate rows, there is one sub duplicated
+print(duplicates)
+
+# Keep one occurrence of each unique "src_subject_id", now there is 11868 participants.
+df <- unique(df, by = "src_subject_id")
+df_t2 <- unique(df_t2, by = "src_subject_id")
+
+
+
+write.csv(df,"D:/OneDrive/文档/ABCD study/COI and brain development/data/input/df_baseline.csv")
+
+write.csv(df_t2,"D:/OneDrive/文档/ABCD study/COI and brain development/data/input/df_t2.csv")
+
+```
+
+```{r}
+
+# Group the dataframe by "rel_family_id" and then sample one subject from each group
+
+#set.seed(123)
+#df_sbling <- df %>%
+  #group_by(rel_family_id) %>%
+  #sample_n(1) %>%
+  #ungroup()
+
+#df <- df %>%
+  #group_by(rel_family_id) %>%
+  #sample_n(1) %>%
+  #ungroup()
+```
+
+# data cleaning and preprocessing
+
+## check missing COI data
+```{r}
+df <- read.csv("D:/OneDrive/文档/ABCD study/COI and brain development/data/input/df_baseline.csv")
+
+# List of COI variables
+coi_vars <- c("reshist_addr1_coi_r_coi_nat", "reshist_addr1_coi_r_ed_nat", "reshist_addr1_coi_r_he_nat", "reshist_addr1_coi_r_se_nat", "reshist_addr1_coi_z_coi_nat", "reshist_addr1_coi_z_ed_nat", "reshist_addr1_coi_z_he_nat", "reshist_addr1_coi_z_se_nat")
+
+# Check for missing values in COI variables
+missing_values <- sapply(df[coi_vars], function(x) sum(is.na(x)))
+
+# Print the count of missing values for each COI variable
+for (i in seq_along(coi_vars)) {
+  cat("Variable:", coi_vars[i], "\n")
+  cat("Missing Values:", missing_values[i], "\n\n")
+}
+
+# Find rows with no missing values in COI variables
+complete_rows <- !apply(df[coi_vars], 1, anyNA)
+df_coi <- df[complete_rows, ]
+# Create a new dataframe with only complete rows
+df <- df[complete_rows, ]
+
+
+
+names(df)[names(df) == "reshist_addr1_coi_r_coi_nat"] <- "COI"
+names(df)[names(df) == "reshist_addr1_coi_r_ed_nat"] <- "COI-ED"
+names(df)[names(df) == "reshist_addr1_coi_r_he_nat"] <- "COI-HE"
+names(df)[names(df) == "reshist_addr1_coi_r_se_nat"] <- "COI-SE"
+names(df)[names(df) ==  "fes_y_ss_fc_pr"] <- "FC"  # family conflic
+
+
+```
+## compute ADI based on five measures
+```{r}
+ADI_var <- c("reshist_addr1_adi_edu_h","reshist_addr1_adi_income","reshist_addr1_adi_unemp","reshist_addr1_adi_pov","reshist_addr1_adi_sp")
+
+df$ADI <- rowSums(df[,ADI_var],na.rm = TRUE)
+```
+
+
+## checking the NAs in age, sex, material hardship, edu, family conflict
+```{r}
+mh <- c("demo_fam_exp1_v2", "demo_fam_exp2_v2", "demo_fam_exp3_v2", "demo_fam_exp4_v2", "demo_fam_exp5_v2", "demo_fam_exp6_v2", "demo_fam_exp7_v2")
+na_counts <- colSums(is.na(df[mh]))
+
+# Print the number of NA values for each variable
+print(na_counts)
+# Compute the material_harship
+df$MH <- rowSums(df[mh], na.rm = TRUE)
+
+# Exclude extrame values greater than 7 from the "MH" variable
+df_mh <- subset(df, MH>7)
+df <- subset(df, MH <= 7)
+
+# Create a new variable "P-EDU" based on the highest education
+df$P_EDU <- pmax(df$demo_prtnr_ed_v2, df$demo_prnt_ed_v2, na.rm = TRUE)
+# Exclude extrame values greater than 100 from the "P_EDU" variable
+df_P_EDU <- subset(df, P_EDU>100)
+df <- subset(df, P_EDU<100)
+
+# family conflict
+df$FC <- df$fes_y_ss_fc_pr.x
+
+covars_cog <- c("interview_age","demo_sex_v2","FC","P_EDU","MH")
+# Create a function to count NAs in a variable
+count_nas <- function(x) sum(is.na(x))
+
+# Apply the count_nas function to each variable in covar_cog
+na_counts <- sapply(df[covars_cog], count_nas)
+
+# Print the NA counts
+print(na_counts)
+
+complete_rows <- !apply(df[covars_cog], 1, anyNA)
+df_covar_cog <- df[complete_rows, ]
+# Create a new dataframe with only complete rows
+df <- df[complete_rows, ]
+
+
+
+```
+
+
+## demograhic info (age, sex, ethinity)
+```{r}
+
+df <- read.csv("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/df_mri_t1.csv")
+
+# Assuming your dataframe is named df
+mean_age <- mean(df$interview_age, na.rm = TRUE)
+sd_age <- sd(df$interview_age, na.rm = TRUE)
+
+# Print the mean and standard deviation
+cat("Mean Age:", mean_age, "\n")
+cat("Standard Deviation of Age:", sd_age, "\n")
+
+df$demo_sex_v2[df$demo_sex_v2 == 3] <- 1
+
+
+# Calculate the total number of females = 0 and males = 1
+count_gender <- df %>%
+  group_by(demo_sex_v2) %>%
+  summarise(count = n())
+
+# Calculate the total number of records
+total_records <- nrow(df)
+
+# Calculate the percentages
+count_gender <- count_gender %>%
+  mutate(percentage = (count / total_records) * 100)
+
+# Display the results
+print(count_gender)
+
+
+ethnicity_counts <- df %>%
+  group_by(race_ethnicity) %>%
+  summarise(count = n())
+
+# Calculate the total number of records
+total_records <- nrow(df)
+
+# Calculate the percentages
+ethnicity_counts <- ethnicity_counts %>%
+  mutate(percentage = (count / total_records) * 100)
+
+# Display the results
+print(ethnicity_counts)
+
+# 1 = White; 2 = Black; 3 = Hispanic; 4 = Asian; 5 = Others
+# recode the race to do the sensitivity analysis
+df <- df %>%
+  mutate(race_recode = case_when(
+    race_ethnicity == 1 ~ 1,
+    race_ethnicity == 2 ~ 2,
+    race_ethnicity == 3 ~ 3,
+    race_ethnicity %in% c(4, 5, NA) ~ 4,
+    TRUE ~ NA_real_  # This handles any values not explicitly coded
+  ))
+
+library(tableone)
+
+# Variables of interest
+vars <- c("COI", "COI.ED", "COI.HE", "COI.SE", "FC", "MH")
+# Create table without stratification
+table1 <- CreateTableOne(vars = vars, data = df)
+# Print table showing mean and SD
+print(table1)
+
+
+```
+
+## anova test for COI in different sites
+```{r}
+# Perform ANOVA
+anova_result <- aov(COI ~ site_id_l, data = df)
+summary(anova_result)
+
+# Assumptions
+
+library(car)
+leveneTest(COI ~site_id_l, data = df)  # Homogeneity of variances
+
+kruskal.test(COI ~ site_id_l, data = df)
+
+
+# Spearman Correlation for each pair
+cor.test(df$COI,df$P_EDU, method = "spearman")
+cor.test(df$COI, df$FC, method = "spearman")
+cor.test(df$COI, df$MH, method = "spearman")
+
+
+```
+
+
+## checking cognition data
+```{r}
+# 
+neurocog_vars <- c("nihtbx_picvocab_uncorrected","nihtbx_flanker_uncorrected","nihtbx_list_uncorrected","nihtbx_cardsort_uncorrected","nihtbx_pattern_uncorrected","nihtbx_picture_uncorrected","nihtbx_reading_uncorrected","nihtbx_fluidcomp_uncorrected","nihtbx_cryst_uncorrected","nihtbx_totalcomp_uncorrected")
+complete_rows <- !apply(df[neurocog_vars], 1, anyNA)
+
+# Create a new dataframe with only complete rows
+df_neurocog <- df[complete_rows, ]
+#df <- df[complete_rows, ]
+
+
+```
+
+
+
+
+```{r}
+ggplot(df, aes(x = COI)) +
+  geom_histogram(binwidth = 1, fill = "skyblue", color = "black", alpha = 0.7) +
+  facet_wrap(~ site_id_l_numeric_v51, scales = "free") +
+  labs(title = "Distribution of COI by Study Site",
+       x = "COI",
+       y = "Frequency")
+```
+
+
+
+
+## distribution of COI raw scores
+
+```{r}
+plot_histogram_only <- function(data, var, letter) {
+  x_min <- min(data[[var]])
+  x_max <- max(data[[var]])
+
+  # Plot the histogram with counts on the Y-axis
+  hist(data[[var]], 
+       xlab = var, 
+       ylab = "Count",  # Change the Y-axis label
+       col = "#07CBA2", 
+       border = "black", 
+       main = "",
+       xlim = c(x_min, x_max),
+      ylim =  c(0, 1500))  # Set y-axis limits
+  
+
+
+ mtext(letter, side = 3, line = 0.90, at = x_min,col = "black", adj = 0)
+}
+# Set up the layout for a 2x2 panel
+par(mfrow = c(2, 2))
+
+# Call the modified function for each variable to plot only histograms
+z_variables_to_plot <- c("COI", "COI-ED", "COI-HE", "COI-SE")
+letters <- c("A", "B", "C", "D")
+
+for (i in 1:length(z_variables_to_plot)) {
+  plot_histogram_only(df, z_variables_to_plot[i], letters[i])
+}
+
+# Reset the layout to the default
+par(mfrow = c(1, 1))
+
+```
+
+
+
+## --correlation between COI and ADI--
+```{r}
+# Create a subset of the merged_df dataframe with the variables of interest
+#z_variables_to_plot <- c("COI", "COI-ED", "COI-HE", "COI-SE","FC","MH","P_EDU","reshist_addr1_adi_edu_h","reshist_addr1_adi_income","reshist_addr1_adi_unemp","reshist_addr1_adi_pov","reshist_addr1_adi_sp")
+ADI_var <- c("reshist_addr1_adi_edu_h","reshist_addr1_adi_income","reshist_addr1_adi_unemp","reshist_addr1_adi_pov","reshist_addr1_adi_sp")
+complete_rows <- !apply(df[ADI_var], 1, anyNA)
+
+# Create a new dataframe with only complete rows
+df <- df[complete_rows, ]
+
+df$ADI <- rowSums(df[,ADI_var],na.rm = TRUE)
+
+z_variables_to_plot <- c("COI", "COI-ED", "COI-HE", "COI-SE","ADI")
+# ,"reshist_addr1_adi_edu_h","reshist_addr1_adi_income","reshist_addr1_adi_unemp","reshist_addr1_adi_pov","reshist_addr1_adi_sp"
+
+subset_df <- df[z_variables_to_plot]
+
+# Calculate the correlation matrix
+cor_matrix <- cor(subset_df,method = "spearman", use = "pairwise.complete.obs")
+
+# Print the correlation matrix
+print(cor_matrix)
+
+jpeg("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/correlation_plot.jpg", width = 800, height = 800, quality = 300)
+# Create a correlation plot using corrplot
+corrplot(cor_matrix, method = "color", type = "upper", tl.col = "black", tl.srt = 45, tl.cex = 0.8, mar = c(2, 1, 4, 1), 
+         addCoef.col = "black", # Color of correlation coefficients
+         addCoefasPercent = FALSE,  number.cex = 0.8, width = 10, height = 10) # Display coefficients as percentages
+dev.off()
+
+```
+
+## --correlation between the whole brain measures
+```{r}
+whole_brain <- c("smri_thick_cdk_mean","smri_vol_cdk_total","smri_area_cdk_total")
+cor_matrix <- cor(df[whole_brain],method = "spearman", use = "pairwise.complete.obs")
+
+# Print the correlation matrix
+print(cor_matrix)
+jpeg("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/correlation_whole brain measures.jpg", width = 800, height = 800, quality = 350)
+# Create a correlation plot using corrplot
+corrplot(cor_matrix, method = "color", type = "upper", tl.col = "black", tl.srt = 45, tl.cex = 0.8, mar = c(2, 1, 4, 1), 
+         addCoef.col = "black", # Color of correlation coefficients
+         addCoefasPercent = FALSE,  number.cex = 0.8, width = 10, height = 10) # Display coefficients as percentages
+dev.off()
+```
+
+
+```{r}
+range(df$MH)
+range(df$FC,na.rm = TRUE)
+
+```
+
+
+
+
+##--Define the ROIs
+```{r}
+
+df$ICV <- df$smri_vol_scs_intracranialv # ICV will be covarites
+
+# Insula
+df$Insula_vol_mean <- (df$smri_vol_cdk_insulalh + df$smri_vol_cdk_insularh)/2
+df$Insula_area_mean <- (df$smri_area_cdk_insulalh + df$smri_area_cdk_insularh)/2
+df$Insula_thick_mean <- (df$smri_thick_cdk_insulalh + df$smri_thick_cdk_insularh)/2
+
+# ACC
+df$ACC_vol_lh <- df$smri_vol_cdk_rracatelh + df$smri_vol_cdk_cdacatelh
+df$ACC_vol_rh <- df$smri_vol_cdk_rracaterh + df$smri_vol_cdk_cdacaterh
+df$ACC_vol_mean <- (df$ACC_vol_lh + df$ACC_vol_rh)/2
+
+df$ACC_area_lh <- df$smri_area_cdk_rracatelh + df$smri_area_cdk_cdacatelh
+df$ACC_area_rh <- df$smri_area_cdk_rracaterh + df$smri_area_cdk_cdacaterh
+df$ACC_area_mean <- (df$ACC_area_lh + df$ACC_area_rh)/2
+
+df$ACC_thick_lh <- df$smri_thick_cdk_rracatelh + df$smri_thick_cdk_cdacatelh
+df$ACC_thick_rh <- df$smri_thick_cdk_rracaterh + df$smri_thick_cdk_cdacaterh
+df$ACC_thick_mean <- (df$ACC_thick_lh + df$ACC_thick_rh)/2
+
+# DLPFC
+df$DLPFC_vol_lh <- df$smri_vol_cdk_sufrlh + df$smri_vol_cdk_cdmdfrlh+ df$smri_vol_cdk_rrmdfrlh
+df$DLPFC_vol_rh <- df$smri_vol_cdk_sufrrh + df$smri_vol_cdk_cdmdfrrh+ df$smri_vol_cdk_rrmdfrrh
+df$DLPFC_vol_mean <- (df$DLPFC_vol_lh + df$DLPFC_vol_rh)/2
+
+df$DLPFC_area_lh <- df$smri_area_cdk_sufrlh + df$smri_area_cdk_cdmdfrlh+ df$smri_area_cdk_rrmdfrlh
+df$DLPFC_area_rh <- df$smri_area_cdk_sufrrh + df$smri_area_cdk_cdmdfrrh+ df$smri_area_cdk_rrmdfrrh
+df$DLPFC_area_mean <- (df$DLPFC_area_lh + df$DLPFC_area_rh)/2
+
+df$DLPFC_thick_lh <- df$smri_thick_cdk_sufrlh + df$smri_thick_cdk_cdmdfrlh+ df$smri_thick_cdk_rrmdfrlh
+df$DLPFC_thick_rh <- df$smri_thick_cdk_sufrrh + df$smri_thick_cdk_cdmdfrrh+ df$smri_thick_cdk_rrmdfrrh
+df$DLPFC_thick_mean <- (df$DLPFC_thick_lh + df$DLPFC_thick_rh)/2
+  
+# IFG
+df$IFG_vol_lh <- df$smri_vol_cdk_parsopclh + df$smri_vol_cdk_parsobislh + df$smri_vol_cdk_parstgrislh
+df$IFG_vol_rh <- df$smri_vol_cdk_parsopcrh + df$smri_vol_cdk_parsobisrh + df$smri_vol_cdk_parstgrisrh
+df$IFG_vol_mean <- (df$IFG_vol_lh + df$IFG_vol_rh)/2
+
+df$IFG_area_lh <- df$smri_area_cdk_parsopclh + df$smri_area_cdk_parsobislh + df$smri_area_cdk_parstgrislh
+df$IFG_area_rh <- df$smri_area_cdk_parsopcrh + df$smri_area_cdk_parsobisrh + df$smri_area_cdk_parstgrisrh
+df$IFG_area_mean <- (df$IFG_area_lh + df$IFG_area_rh)/2
+
+df$IFG_thick_lh <- df$smri_thick_cdk_parsopclh + df$smri_thick_cdk_parsobislh + df$smri_thick_cdk_parstgrislh
+df$IFG_thick_rh <- df$smri_thick_cdk_parsopcrh + df$smri_thick_cdk_parsobisrh + df$smri_thick_cdk_parstgrisrh
+df$IFG_thick_mean <- (df$IFG_thick_lh + df$IFG_thick_rh)/2
+
+```
+
+
+#--Linear mixed-effect models--
+
+## load data
+```{r}
+df_neurocog <- read.csv("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/df_neurocog_t1.csv")
+
+df_mri <- read.csv("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/df_mri_t1.csv")
+```
+
+
+## model comparison
+
+I mainly want to compare the four models:
+model1: basic demographic info adjusted models with random slope
+model2: basic demographic info adjusted models without random slope
+model3: fully adjusted models without random slope
+model4: fully adjusted models with random slope
+
+```{r}
+m1 <- lmer(nihtbx_totalcomp_uncorrected~ COI + interview_age + demo_sex_v2 + (1 | site_id_l/rel_family_id) + (COI | site_id_l), data = df_neurocog)
+
+m2 <- lmer(nihtbx_totalcomp_uncorrected~ COI + interview_age + demo_sex_v2 + (1 | site_id_l/rel_family_id), data = df_neurocog)
+
+m3 <- lmer(nihtbx_totalcomp_uncorrected~ COI + interview_age + demo_sex_v2 + P_EDU + FC + MH + (1 | site_id_l/rel_family_id) + (COI | site_id_l), data = df_neurocog)
+
+m4 <- lmer(nihtbx_totalcomp_uncorrected~ COI + interview_age + demo_sex_v2 + P_EDU + FC + MH + (1 | site_id_l/rel_family_id), data = df_neurocog)
+
+AIC(m1, m2, m3, m4)
+
+variance_components <- VarCorr(m1)
+print(variance_components)
+
+
+model_summary <- summary(m3)
+
+# Fixed effect (Within-Site Beta)
+beta_within_site <- model_summary$coefficients["COI", "Estimate"]
+
+# Random effect (Variation in COI across Sites - Between-Site Beta)
+beta_between_site <- ranef(m3)$site_id_l[, "COI"]
+
+# Print the results
+print(paste("Within-Site Beta (Fixed Effect):", beta_within_site))
+print("Between-Site Beta (Random Effects):")
+print(beta_between_site)
+
+```
+
+The model comparison results shows that models with random slope of COI are better (lower AIC values) than models without. However, those models  with random slope of COI have convergence problems. When I checked the variance expplained by random slope of COI at different site, indeed, each site has different slope. But the models are too complex, and fitting process is not correct.
+
+# Cognitive function--Basic adjusted model
+
+## models for cognition
+
+### rescale the vars
+```{r}
+# Define continuous and neurocognitive variables
+con_vars <- c("COI", "P_EDU", "FC", "MH", "interview_age")
+neurocog_vars <- c(
+  "nihtbx_picvocab_uncorrected",
+  "nihtbx_flanker_uncorrected",
+  "nihtbx_list_uncorrected",
+  "nihtbx_cardsort_uncorrected",
+  "nihtbx_pattern_uncorrected",
+  "nihtbx_picture_uncorrected",
+  "nihtbx_reading_uncorrected",
+  "nihtbx_fluidcomp_uncorrected",
+  "nihtbx_cryst_uncorrected",
+  "nihtbx_totalcomp_uncorrected"
+)
+
+
+# Function to rescale the continuous and neurocognitive variables
+rescale_vars <- function(df, con_vars, neurocog_vars) {
+  # Scale continuous variables
+  for (var in con_vars) {
+    df[[paste0(var, "_scaled")]] <- as.numeric(scale(df[[var]]))
+  }
+
+  # Scale neurocognitive variables
+  for (var in neurocog_vars) {
+    scaled_var_name <- paste0(var, "_scaled")
+    df[[scaled_var_name]] <- as.numeric(scale(df[[var]]))
+  }
+  
+  return(df)
+}
+
+df_neurocog <- rescale_vars(df_neurocog, con_vars, neurocog_vars)
+
+df_mri <- rescale_vars(df_mri, con_vars, neurocog_vars)
+
+```
+
+
+## basic model
+```{r}
+
+basic_cognitive_analysis <- function(df_neurocog, neurocog_vars, neurocog_names, output_file = NULL) {
+  # Initialize lists for results and p-values for correction
+  results_list <- list()
+  p_values_unstd <- c()
+  p_values_std <- c()
+
+  # Scale the neurocognitive variables and run both unstandardized and standardized models
+  for (i in seq_along(neurocog_vars)) {
+    var <- neurocog_vars[i]
+    var_scaled <- paste0(var, "_scaled")
+
+    # Scale the variable
+    df_neurocog[[var_scaled]] <- scale(df_neurocog[[var]])
+
+    # Unstandardized model
+    model_unstd <- lmer(as.formula(paste(var, "~ COI + interview_age + demo_sex_v2 + (1 | site_id_l/rel_family_id)")), data = df_neurocog)
+    summary_unstd <- summary(model_unstd)
+    ci_unstd <- confint(model_unstd, method = "Wald")["COI", ]
+
+    # Standardized model
+    model_std <- lmer(as.formula(paste(var_scaled, "~ COI_scaled + interview_age_scaled + demo_sex_v2 + (1 | site_id_l/rel_family_id)")), data = df_neurocog)
+    summary_std <- summary(model_std)
+    ci_std <- confint(model_std, method = "Wald")["COI_scaled", ]
+
+    # Collect p-values for correction
+    p_values_unstd <- c(p_values_unstd, summary_unstd$coefficients["COI", "Pr(>|t|)"])
+    p_values_std <- c(p_values_std, summary_std$coefficients["COI_scaled", "Pr(>|t|)"])
+
+    # Store the results without corrections
+    results_list[[i]] <- data.frame(
+      Outcome_Variable = neurocog_names[i],
+      COI_Beta_CI_Unstd = paste0(
+        round(summary_unstd$coefficients["COI", "Estimate"], 2), 
+        " (", round(ci_unstd[1], 2), ", ", round(ci_unstd[2], 2), ")"
+      ),
+      P_Value_Unstd = summary_unstd$coefficients["COI", "Pr(>|t|)"],
+      COI_Beta_CI_Std = paste0(
+        round(summary_std$coefficients["COI_scaled", "Estimate"], 2), 
+        " (", round(ci_std[1], 2), ", ", round(ci_std[2], 2), ")"
+      ),
+      Age_beta_unstd = round(summary_unstd$coefficients["interview_age", "Estimate"], 2),
+      Age_beta_std = round(summary_std$coefficients["interview_age_scaled", "Estimate"], 2),
+      Age_p = round(summary_std$coefficients["interview_age_scaled", "Pr(>|t|)"], 3),
+      Sex_beta_unstd = round(summary_unstd$coefficients["demo_sex_v2", "Estimate"], 2),
+      Sex_beta_std = round(summary_std$coefficients["demo_sex_v2", "Estimate"], 2),
+      Sex_p = round(summary_std$coefficients["demo_sex_v2", "Pr(>|t|)"], 3)
+    )
+  }
+
+  # Apply Benjamini-Yekutieli correction
+  adjusted_p_values_unstd <- p.adjust(p_values_unstd, method = "BY")
+ 
+  # Add the corrected p-values to the results
+  for (i in seq_along(results_list)) {
+    results_list[[i]]$Adjusted_P_Value_Unstd <- round(adjusted_p_values_unstd[i], 3)
+  }
+
+  # Combine all results into a single data frame
+  results_combined <- do.call(rbind, results_list)
+  
+  # Format p-values
+  results_combined$P_Value_Unstd <- ifelse(results_combined$P_Value_Unstd < 0.001, "p < 0.001", sprintf("%.3f", results_combined$P_Value_Unstd))
+  results_combined$Adjusted_P_Value_Unstd <- ifelse(results_combined$Adjusted_P_Value_Unstd < 0.001, "p < 0.001", sprintf("%.3f", results_combined$Adjusted_P_Value_Unstd))
+  
+  # Optional CSV export
+  if (!is.null(output_file)) {
+    write.csv(results_combined, output_file, row.names = FALSE)
+  }
+
+  return(results_combined)
+}
+
+
+```
+
+
+```{r}
+
+
+
+# Example usage
+neurocog_vars <- c(
+  "nihtbx_picvocab_uncorrected",
+  "nihtbx_flanker_uncorrected",
+  "nihtbx_list_uncorrected",
+  "nihtbx_cardsort_uncorrected",
+  "nihtbx_pattern_uncorrected",
+  "nihtbx_picture_uncorrected",
+  "nihtbx_reading_uncorrected",
+  "nihtbx_fluidcomp_uncorrected",
+  "nihtbx_cryst_uncorrected",
+  "nihtbx_totalcomp_uncorrected"
+)
+
+neurocog_names <- c("Verbal Ability", 
+                    "Attention Control", 
+                    "Working Memory", 
+                    "Cognitive Flexibility", 
+                    "Processing Speed", 
+                    "Episodic Memory", 
+                    "Reading Ability", 
+                    "Fluid Cognition", 
+                    "Crystallized Cognition", 
+                    "Composite Cognition")
+
+
+  
+  # Run the cognitive analysis function on the current dataset
+cog_basic_result <- basic_cognitive_analysis(df_neurocog, neurocog_vars, neurocog_names)
+  
+# View the final combined results
+print(cog_basic_result)
+
+# Optionally, save the combined results as a single CSV file
+write.csv(cog_basic_result, "./output/basic_cognition_results_unstd_std.csv", row.names = FALSE)
+
+```
+
+### Full model
+
+full model function for cognition
+```{r}
+
+full_cognitive_analysis <- function(df_neurocog, neurocog_vars, neurocog_names, output_file = NULL) {
+  # Initialize lists for results and p-values for correction
+  results_list <- list()
+  p_values_unstd <- c()
+  p_values_std <- c()
+
+  # Scale the neurocognitive variables and run both unstandardized and standardized models
+  for (i in seq_along(neurocog_vars)) {
+    var <- neurocog_vars[i]
+    var_scaled <- paste0(var, "_scaled")
+
+    # Scale the variable
+    df_neurocog[[var_scaled]] <- scale(df_neurocog[[var]])
+
+    # Unstandardized model
+    model_unstd <- lmer(as.formula(paste(var, "~ COI + interview_age + demo_sex_v2 + P_EDU + FC + MH + (1 | site_id_l/rel_family_id)")), data = df_neurocog)
+    summary_unstd <- summary(model_unstd)
+    ci_unstd <- confint(model_unstd, method = "Wald")["COI", ]
+
+    # Standardized model
+    model_std <- lmer(as.formula(paste(var_scaled, "~ COI_scaled + interview_age_scaled + demo_sex_v2 + P_EDU_scaled + FC_scaled + MH_scaled + (1 | site_id_l/rel_family_id)")), data = df_neurocog)
+    summary_std <- summary(model_std)
+    ci_std <- confint(model_std, method = "Wald")["COI_scaled", ]
+
+    # Collect p-values for correction
+    p_values_unstd <- c(p_values_unstd, summary_unstd$coefficients["COI", "Pr(>|t|)"])
+    p_values_std <- c(p_values_std, summary_std$coefficients["COI_scaled", "Pr(>|t|)"])
+
+    # Store the results without corrections
+    results_list[[i]] <- data.frame(
+      Outcome_Variable = neurocog_names[i],
+      COI_Beta_CI_Unstd = paste0(
+        round(summary_unstd$coefficients["COI", "Estimate"], 2), 
+        " (", round(ci_unstd[1], 2), ", ", round(ci_unstd[2], 2), ")"
+      ),
+      P_Value_Unstd = summary_unstd$coefficients["COI", "Pr(>|t|)"],
+      COI_Beta_CI_Std = paste0(
+        round(summary_std$coefficients["COI_scaled", "Estimate"], 2), 
+        " (", round(ci_std[1], 2), ", ", round(ci_std[2], 2), ")"
+      ),
+      Age_beta_unstd = round(summary_unstd$coefficients["interview_age", "Estimate"], 2),
+      Age_beta_std = round(summary_std$coefficients["interview_age_scaled", "Estimate"], 2),
+      Age_p = round(summary_std$coefficients["interview_age_scaled", "Pr(>|t|)"], 3),
+      Sex_beta_unstd = round(summary_unstd$coefficients["demo_sex_v2", "Estimate"], 2),
+      Sex_beta_std = round(summary_std$coefficients["demo_sex_v2", "Estimate"], 2),
+      Sex_p = round(summary_std$coefficients["demo_sex_v2", "Pr(>|t|)"], 3),
+      PEDU_beta_unstd = round(summary_unstd$coefficients["P_EDU", "Estimate"], 2),
+      PEDU_beta_std = round(summary_std$coefficients["P_EDU_scaled", "Estimate"], 2),
+      PEDU_p = round(summary_std$coefficients["P_EDU_scaled", "Pr(>|t|)"], 3),
+      FC_beta_unstd = round(summary_unstd$coefficients["FC", "Estimate"], 2),
+      FC_beta_std = round(summary_std$coefficients["FC_scaled", "Estimate"], 2),
+      FC_p = round(summary_std$coefficients["FC_scaled", "Pr(>|t|)"], 3),
+      MH_beta_unstd = round(summary_unstd$coefficients["MH", "Estimate"], 2),
+      MH_beta_std = round(summary_std$coefficients["MH_scaled", "Estimate"], 2),
+      MH_p = round(summary_std$coefficients["MH_scaled", "Pr(>|t|)"], 3)
+    )
+  }
+
+  # Apply Benjamini-Yekutieli correction
+  adjusted_p_values_unstd <- p.adjust(p_values_unstd, method = "BY")
+ 
+  # Add the corrected p-values to the results
+  for (i in seq_along(results_list)) {
+    results_list[[i]]$Adjusted_P_Value_Unstd <- round(adjusted_p_values_unstd[i], 3)
+  }
+
+  # Combine all results into a single data frame
+  results_combined <- do.call(rbind, results_list)
+  
+  # Format p-values
+  results_combined$P_Value_Unstd <- ifelse(results_combined$P_Value_Unstd < 0.001, "p < 0.001", sprintf("%.3f", results_combined$P_Value_Unstd))
+  results_combined$Adjusted_P_Value_Unstd <- ifelse(results_combined$Adjusted_P_Value_Unstd < 0.001, "p < 0.001", sprintf("%.3f", results_combined$Adjusted_P_Value_Unstd))
+  
+  # Optional CSV export
+  if (!is.null(output_file)) {
+    write.csv(results_combined, output_file, row.names = FALSE)
+  }
+
+  return(results_combined)
+}
+
+
+```
+
+
+```{r}
+
+# Example usage
+neurocog_vars <- c(
+  "nihtbx_picvocab_uncorrected",
+  "nihtbx_flanker_uncorrected",
+  "nihtbx_list_uncorrected",
+  "nihtbx_cardsort_uncorrected",
+  "nihtbx_pattern_uncorrected",
+  "nihtbx_picture_uncorrected",
+  "nihtbx_reading_uncorrected",
+  "nihtbx_fluidcomp_uncorrected",
+  "nihtbx_cryst_uncorrected",
+  "nihtbx_totalcomp_uncorrected"
+)
+
+neurocog_names <- c("Verbal Ability", 
+                    "Attention Control", 
+                    "Working Memory", 
+                    "Cognitive Flexibility", 
+                    "Processing Speed", 
+                    "Episodic Memory", 
+                    "Reading Ability", 
+                    "Fluid Cognition", 
+                    "Crystallized Cognition", 
+                    "Composite Cognition")
+
+ 
+cog_full_result <- full_cognitive_analysis(df_neurocog, neurocog_vars, neurocog_names)
+
+
+print(cog_full_result)
+
+# Optionally, save the combined results as a single CSV file
+write.csv(cog_full_result, "./output/full_cognition_results_unstd_std.csv", row.names = FALSE)
+
+```
+
+## Who-brain
+### basic model
+
+```{r}
+
+basic_brain_analysis <- function(df_mri, brain_vars, brain_names, output_file = NULL) {
+  # Initialize lists for results and p-values for correction
+  results_list <- list()
+  p_values_unstd <- c()
+  p_values_std <- c()
+
+  # Scale the neurocognitive variables and run both unstandardized and standardized models
+  for (i in seq_along(brain_vars)) {
+    var <- brain_vars[i]
+    var_scaled <- paste0(var, "_scaled")
+
+    # Scale the variable
+    df_mri[[var_scaled]] <- scale(df_mri[[var]])
+
+    # Unstandardized model
+    model_unstd <- lmer(as.formula(paste(var, "~ COI + interview_age + demo_sex_v2 + ICV_scaled + (1 | site_id_l/rel_family_id)")), data = df_mri)
+    summary_unstd <- summary(model_unstd)
+    ci_unstd <- confint(model_unstd, method = "Wald")["COI", ]
+
+    # Standardized model
+    model_std <- lmer(as.formula(paste(var_scaled, "~ COI_scaled + interview_age_scaled + demo_sex_v2 + ICV_scaled + (1 | site_id_l/rel_family_id)")), data = df_mri)
+    summary_std <- summary(model_std)
+    ci_std <- confint(model_std, method = "Wald")["COI_scaled", ]
+
+    # Collect p-values for correction
+    p_values_unstd <- c(p_values_unstd, summary_unstd$coefficients["COI", "Pr(>|t|)"])
+    p_values_std <- c(p_values_std, summary_std$coefficients["COI_scaled", "Pr(>|t|)"])
+
+    # Store the results without corrections
+    results_list[[i]] <- data.frame(
+      Outcome_Variable = brain_names[i],
+      COI_Beta_CI_Unstd = paste0(
+        round(summary_unstd$coefficients["COI", "Estimate"], 5), 
+        " (", round(ci_unstd[1], 5), ", ", round(ci_unstd[2], 5), ")"
+      ),
+      P_Value_Unstd = summary_unstd$coefficients["COI", "Pr(>|t|)"],
+      COI_Beta_CI_Std = paste0(
+        round(summary_std$coefficients["COI_scaled", "Estimate"], 2), 
+        " (", round(ci_std[1], 2), ", ", round(ci_std[2], 2), ")"
+      ),
+      Age_beta_unstd = round(summary_unstd$coefficients["interview_age", "Estimate"], 2),
+      Age_beta_std = round(summary_std$coefficients["interview_age_scaled", "Estimate"], 2),
+      Age_p = round(summary_std$coefficients["interview_age_scaled", "Pr(>|t|)"], 3),
+      Sex_beta_unstd = round(summary_unstd$coefficients["demo_sex_v2", "Estimate"], 2),
+      Sex_beta_std = round(summary_std$coefficients["demo_sex_v2", "Estimate"], 2),
+      Sex_p = round(summary_std$coefficients["demo_sex_v2", "Pr(>|t|)"], 3),
+      ICV_beta_std = round(summary_unstd$coefficients["ICV_scaled", "Estimate"], 2),
+      ICV_beta_std = round(summary_std$coefficients["ICV_scaled", "Estimate"], 2),
+      ICV_p = round(summary_std$coefficients["ICV_scaled", "Pr(>|t|)"], 3)
+    )
+  }
+
+  # Apply Benjamini-Yekutieli correction
+  adjusted_p_values_unstd <- p.adjust(p_values_unstd, method = "BH")
+ 
+  # Add the corrected p-values to the results
+  for (i in seq_along(results_list)) {
+    results_list[[i]]$Adjusted_P_Value_Unstd <- round(adjusted_p_values_unstd[i], 3)
+  }
+
+  # Combine all results into a single data frame
+  results_combined <- do.call(rbind, results_list)
+  
+  # Format p-values
+  results_combined$P_Value_Unstd <- ifelse(results_combined$P_Value_Unstd < 0.001, "p < 0.001", sprintf("%.3f", results_combined$P_Value_Unstd))
+  results_combined$Adjusted_P_Value_Unstd <- ifelse(results_combined$Adjusted_P_Value_Unstd < 0.001, "p < 0.001", sprintf("%.3f", results_combined$Adjusted_P_Value_Unstd))
+  
+  # Optional CSV export
+  if (!is.null(output_file)) {
+    write.csv(results_combined, output_file, row.names = FALSE)
+  }
+
+  return(results_combined)
+}
+
+```
+
+
+```{r}
+whole_brain_var <- c("smri_vol_cdk_total","smri_area_cdk_total","smri_thick_cdk_mean")
+whole_brain_name <- c("Cortical Gray Matter Volume","Total Cortical Surface Area","Mean Cortical Thickness")
+
+
+who_results_basic <- basic_brain_analysis(df_mri, whole_brain_var, whole_brain_name)
+
+
+print(who_results_basic)
+
+
+write.csv(who_results_basic, "./output/basic_who_results_unstd_std.csv", row.names = FALSE)
+
+```
+
+### check the variance of who-brain outcomes
+
+```{r}
+cv <- function(x) sd(x, na.rm = TRUE) / mean(x, na.rm = TRUE)
+
+# Apply to your 3 variables
+cv_values <- sapply(df_mri[, whole_brain_var], cv)
+print(cv_values)
+
+```
+
+```{r}
+whole_brain_var <- c("smri_vol_cdk_total","smri_area_cdk_total","smri_thick_cdk_mean")
+scaled_df <- as.data.frame(scale(df_mri[ , whole_brain_var], center = FALSE, scale = TRUE))
+stats <- rbind(
+  Mean = sapply(scaled_df, mean, na.rm = TRUE),
+  SD = sapply(scaled_df, sd, na.rm = TRUE)
+)
+
+# View the result
+print(stats)
+
+ROI_var <- c(
+    "DLPFC_vol_mean", "DLPFC_area_mean", "DLPFC_thick_mean", 
+  "ACC_vol_mean", "ACC_area_mean", "ACC_thick_mean", 
+  "IFG_vol_mean", "IFG_area_mean", "IFG_thick_mean",
+  "Insula_vol_mean", "Insula_area_mean", "Insula_thick_mean"
+)
+
+
+scaled_df <- as.data.frame(scale(df_mri[ ,ROI_var], center = FALSE, scale = TRUE))
+sapply(scaled_df, sd)
+
+```
+
+
+### Full model
+```{r}
+
+full_brain_analysis <- function(df_mri, brain_vars, brain_names, output_file = NULL) {
+  # Initialize lists for results and p-values for correction
+  results_list <- list()
+  p_values_unstd <- c()
+  p_values_std <- c()
+
+  # Scale the neurocognitive variables and run both unstandardized and standardized models
+  for (i in seq_along(brain_vars)) {
+    var <- brain_vars[i]
+    var_scaled <- paste0(var, "_scaled")
+
+    # Scale the variable
+    df_mri[[var_scaled]] <- scale(df_mri[[var]])
+
+    # Unstandardized model
+    model_unstd <- lmer(as.formula(paste(var, "~ COI + interview_age + demo_sex_v2 + ICV_scaled + P_EDU + FC + MH + (1 | site_id_l/rel_family_id)")), data = df_mri)
+    summary_unstd <- summary(model_unstd)
+    ci_unstd <- confint(model_unstd, method = "Wald")["COI", ]
+
+    # Standardized model
+    model_std <- lmer(as.formula(paste(var_scaled, "~ COI_scaled + interview_age_scaled + demo_sex_v2 + ICV_scaled + P_EDU_scaled + FC_scaled + MH_scaled + (1 | site_id_l/rel_family_id)")), data = df_mri)
+    summary_std <- summary(model_std)
+    ci_std <- confint(model_std, method = "Wald")["COI_scaled", ]
+
+    # Collect p-values for correction
+    p_values_unstd <- c(p_values_unstd, summary_unstd$coefficients["COI", "Pr(>|t|)"])
+    p_values_std <- c(p_values_std, summary_std$coefficients["COI_scaled", "Pr(>|t|)"])
+
+    # Store the results without corrections
+    results_list[[i]] <- data.frame(
+      Outcome_Variable = brain_names[i],
+      COI_Beta_CI_Unstd = paste0(
+        round(summary_unstd$coefficients["COI", "Estimate"], 5), 
+        " (", round(ci_unstd[1], 5), ", ", round(ci_unstd[2], 5), ")"
+      ),
+      P_Value_Unstd = summary_unstd$coefficients["COI", "Pr(>|t|)"],
+      COI_Beta_CI_Std = paste0(
+        round(summary_std$coefficients["COI_scaled", "Estimate"], 2), 
+        " (", round(ci_std[1], 2), ", ", round(ci_std[2], 2), ")"
+      ),
+      Age_beta_unstd = round(summary_unstd$coefficients["interview_age", "Estimate"], 2),
+      Age_beta_std = round(summary_std$coefficients["interview_age_scaled", "Estimate"], 2),
+      Age_p = round(summary_std$coefficients["interview_age_scaled", "Pr(>|t|)"], 3),
+      Sex_beta_unstd = round(summary_unstd$coefficients["demo_sex_v2", "Estimate"], 2),
+      Sex_beta_std = round(summary_std$coefficients["demo_sex_v2", "Estimate"], 2),
+      Sex_p = round(summary_std$coefficients["demo_sex_v2", "Pr(>|t|)"], 3),
+      ICV_beta_unstd = round(summary_unstd$coefficients["ICV_scaled", "Estimate"], 2),
+      ICV_beta_std = round(summary_std$coefficients["ICV_scaled", "Estimate"], 2),
+      ICV_p = round(summary_std$coefficients["ICV_scaled", "Pr(>|t|)"], 3),
+      PEDU_beta_unstd = round(summary_unstd$coefficients["P_EDU", "Estimate"], 2),
+      PEDU_beta_std = round(summary_std$coefficients["P_EDU_scaled", "Estimate"], 2),
+      PEDU_p = round(summary_std$coefficients["P_EDU_scaled", "Pr(>|t|)"], 3),
+      FC_beta_unstd = round(summary_unstd$coefficients["FC", "Estimate"], 2),
+      FC_beta_std = round(summary_std$coefficients["FC_scaled", "Estimate"], 2),
+      FC_p = round(summary_std$coefficients["FC_scaled", "Pr(>|t|)"], 3),
+      MH_beta_unstd = round(summary_unstd$coefficients["MH", "Estimate"], 2),
+      MH_beta_std = round(summary_std$coefficients["MH_scaled", "Estimate"], 2),
+      MH_p = round(summary_std$coefficients["MH_scaled", "Pr(>|t|)"], 3)
+    )
+  }
+
+  # Apply Benjamini-Yekutieli correction
+  adjusted_p_values_unstd <- p.adjust(p_values_unstd, method = "BH")
+ 
+  # Add the corrected p-values to the results
+  for (i in seq_along(results_list)) {
+    results_list[[i]]$Adjusted_P_Value_Unstd <- round(adjusted_p_values_unstd[i], 3)
+  }
+
+  # Combine all results into a single data frame
+  results_combined <- do.call(rbind, results_list)
+  
+  # Format p-values
+  results_combined$P_Value_Unstd <- ifelse(results_combined$P_Value_Unstd < 0.001, "p < 0.001", sprintf("%.3f", results_combined$P_Value_Unstd))
+  results_combined$Adjusted_P_Value_Unstd <- ifelse(results_combined$Adjusted_P_Value_Unstd < 0.001, "p < 0.001", sprintf("%.3f", results_combined$Adjusted_P_Value_Unstd))
+  
+  # Optional CSV export
+  if (!is.null(output_file)) {
+    write.csv(results_combined, output_file, row.names = FALSE)
+  }
+
+  return(results_combined)
+}
+
+```
+
+
+```{r}
+whole_brain_var <- c("smri_vol_cdk_total","smri_area_cdk_total","smri_thick_cdk_mean")
+whole_brain_name <- c("Cortical Gray Matter Volume","Total Cortical Surface Area","Mean Cortical Thickness")
+
+who_results_full <- full_brain_analysis(df_mri, whole_brain_var, whole_brain_name)
+  
+
+# View the final combined results
+print(who_results_full)
+
+
+write.csv(who_results_full, "./output/full_who_results_unstd_std.csv", row.names = FALSE)
+
+```
+
+### ROI
+
+### basic model
+```{r}
+ROI_var <- c(
+    "DLPFC_vol_mean", "DLPFC_area_mean", "DLPFC_thick_mean", 
+  "ACC_vol_mean", "ACC_area_mean", "ACC_thick_mean", 
+  "IFG_vol_mean", "IFG_area_mean", "IFG_thick_mean",
+  "Insula_vol_mean", "Insula_area_mean", "Insula_thick_mean"
+)
+ROI_brain_name <-  c("DLPFC Volume", "DLPFC Surface Area", "DLPFC Thickness",
+  "ACC Volume", "ACC Surface Area", "ACC Thickness",
+  "IFG Volume", "IFG Surface Area", "IFG Thickness",
+  "Insula Volume", "Insula Surface Area", "Insula Thickness")
+
+
+ROI_results_basic <- basic_brain_analysis(df_mri, ROI_var, ROI_brain_name)
+
+# View the final combined results
+print(ROI_results_basic)
+
+
+write.csv(ROI_results_basic, "./output/basic_ROI_results_unstd_std.csv", row.names = FALSE)
+
+```
+
+
+### Full model
+
+```{r}
+ROI_var <- c(
+    "DLPFC_vol_mean", "DLPFC_area_mean", "DLPFC_thick_mean", 
+  "ACC_vol_mean", "ACC_area_mean", "ACC_thick_mean", 
+  "IFG_vol_mean", "IFG_area_mean", "IFG_thick_mean",
+  "Insula_vol_mean", "Insula_area_mean", "Insula_thick_mean"
+)
+ROI_brain_name <-  c("DLPFC Volume", "DLPFC Surface Area", "DLPFC Thickness",
+  "ACC Volume", "ACC Surface Area", "ACC Thickness",
+  "IFG Volume", "IFG Surface Area", "IFG Thickness",
+  "Insula Volume", "Insula Surface Area", "Insula Thickness")
+
+
+ROI_results_full <- full_brain_analysis(df_mri, ROI_var, ROI_brain_name)
+  
+
+# View the final combined results
+print(ROI_results_full)
+
+
+write.csv(ROI_results_full, "./output/full_ROI_results_unstd_std.csv", row.names = FALSE)
+
+```
+
+### with random slope
+```{r}
+# Define the list of neurocognitive variables
+neurocog_vars <- c(
+  "nihtbx_picvocab_uncorrected",
+  "nihtbx_flanker_uncorrected",
+  "nihtbx_list_uncorrected",
+  "nihtbx_cardsort_uncorrected",
+  "nihtbx_pattern_uncorrected",
+  "nihtbx_picture_uncorrected",
+  "nihtbx_reading_uncorrected",
+  "nihtbx_fluidcomp_uncorrected",
+  "nihtbx_cryst_uncorrected",
+  "nihtbx_totalcomp_uncorrected"
+)
+
+# Initialize lists to store the models, p-values, CIs, and betas
+Basic_cog_models <- list()
+p_values_list <- list()
+beta_list <- list()
+ci_list <- list()
+
+# Loop over each cognitive variable and fit a separate LMM
+for (var in neurocog_vars) {
+  # Create the formula for the current model
+  formula <- as.formula(paste(var, "~ COI + interview_age + demo_sex_v2 +",
+                              "(1 | site_id_l/rel_family_id) + (COI | site_id_l)"))
+  
+  # Fit the LMM for the current cognitive variable
+  model <- lmer(formula, data = df_neurocog)
+  
+  # Store the model in the list
+  Basic_cog_models[[var]] <- model
+  
+  # Extract the summary of the model
+  model_summary <- summary(model)
+  
+  # Extract the p-values for fixed effects
+  p_values_df <- model_summary$coefficients
+  
+  # Check if COI is in the fixed effects
+  if ("COI" %in% rownames(p_values_df)) {
+    # Extract the beta and p-value for COI
+    beta_list[[var]] <- p_values_df["COI", "Estimate"]
+    p_values_list[[var]] <- p_values_df["COI", "Pr(>|t|)"]
+    
+    # Extract confidence intervals for the model parameters
+    conf_intervals <- confint(model, method = "Wald")  # Wald method is used for fixed effects
+    
+    # Handle cases where confidence intervals might not be properly formed
+    if ("COI" %in% rownames(conf_intervals)) {
+      ci <- conf_intervals["COI", ]
+      if (length(ci) == 2) {  # Ensure there are exactly two elements (lower and upper CI)
+        ci_list[[var]] <- ci
+      } else {
+        ci_list[[var]] <- c(NA, NA)  # Default to NA if confidence interval is not as expected
+      }
+    } else {
+      ci_list[[var]] <- c(NA, NA)  # Default to NA if COI is not in the CI results
+    }
+  } else {
+    # If COI is not found, store NA for betas, p-values, and CIs
+    beta_list[[var]] <- NA
+    p_values_list[[var]] <- NA
+    ci_list[[var]] <- c(NA, NA)
+  }
+}
+
+# Combine all p-values into a single vector, removing NAs
+all_p_values <- unlist(p_values_list)
+all_p_values <- all_p_values[!is.na(all_p_values)]
+
+# Adjust the p-values using the Benjamini-Yekutieli method
+adjusted_p_values <- p.adjust(all_p_values, method = "BY")
+
+# Rebuild the list with adjusted p-values, keeping the names
+adjusted_p_values_list <- setNames(as.list(adjusted_p_values), names(p_values_list))
+
+# Create a data frame to store the results
+results_df <- data.frame(
+  Outcome_Variable = names(beta_list),
+  COI_Beta = round(unlist(beta_list), 3),
+  COI_Beta_LowerCI = round(sapply(ci_list, `[`, 1), 3),  # Extract and round lower CI
+  COI_Beta_UpperCI = round(sapply(ci_list, `[`, 2), 3),  # Extract and round upper CI
+  P_Value = unlist(p_values_list),
+  Adjusted_P_Value = unlist(adjusted_p_values_list)
+)
+
+# Format p-values
+results_df$P_Value <- ifelse(results_df$P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$P_Value))
+results_df$Adjusted_P_Value <- ifelse(results_df$Adjusted_P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$Adjusted_P_Value))
+
+# Print the formatted results data frame
+print(results_df)
+
+# Optionally, print summaries of each model
+#for (var in neurocog_vars) {
+#  cat("\nModel Summary for:", var, "\n")
+#  print(summary(Basic_cog_models[[var]]))
+#}
+
+
+```
+all the models below were removed the random slope term
+
+### unstandarzied models
+```{r}
+neurocog_vars <- c(
+  "nihtbx_picvocab_uncorrected",
+  "nihtbx_flanker_uncorrected",
+  "nihtbx_list_uncorrected",
+  "nihtbx_cardsort_uncorrected",
+  "nihtbx_pattern_uncorrected",
+  "nihtbx_picture_uncorrected",
+  "nihtbx_reading_uncorrected",
+  "nihtbx_fluidcomp_uncorrected",
+  "nihtbx_cryst_uncorrected",
+  "nihtbx_totalcomp_uncorrected"
+)
+
+neurocog_names <- c("Verbal Ability", 
+                    "Attention Control", 
+                    "Working Memory", 
+                    "Cognitive Flexibility", 
+                    "Processing Speed", 
+                    "Episodic Memory", 
+                    "Reading Ability", 
+                    "Fluid Cognition", 
+                    "Crystallized Cognition", 
+                    "Composite Cognition")
+
+# Initialize lists to store the models, p-values, CIs, and betas
+Basic_cog_models2 <- list()
+p_values_list <- list()
+beta_list <- list()
+ci_list <- list()
+
+# Loop over each cognitive variable and fit a separate LMM
+for (var in neurocog_vars) {
+  # Create the formula for the current model
+  formula <- as.formula(paste(var, "~ COI + interview_age + demo_sex_v2 +",
+                              "(1 | site_id_l/rel_family_id)"))
+  
+  # Fit the LMM for the current cognitive variable
+  model <- lmer(formula, data = df_neurocog)
+  
+  # Store the model in the list
+  Basic_cog_models2[[var]] <- model
+  
+  # Extract the summary of the model
+  model_summary <- summary(model)
+  
+  # Extract the p-values for fixed effects
+  p_values_df <- model_summary$coefficients
+  
+  # Check if COI is in the fixed effects
+  if ("COI" %in% rownames(p_values_df)) {
+    # Extract the beta and p-value for COI
+    beta_list[[var]] <- p_values_df["COI", "Estimate"]
+    p_values_list[[var]] <- p_values_df["COI", "Pr(>|t|)"]
+    
+    # Extract confidence intervals for the model parameters
+    conf_intervals <- confint(model, method = "Wald")  # Wald method is used for fixed effects
+    
+    # Handle cases where confidence intervals might not be properly formed
+    if ("COI" %in% rownames(conf_intervals)) {
+      ci <- conf_intervals["COI", ]
+      if (length(ci) == 2) {  # Ensure there are exactly two elements (lower and upper CI)
+        ci_list[[var]] <- ci
+      } else {
+        ci_list[[var]] <- c(NA, NA)  # Default to NA if confidence interval is not as expected
+      }
+    } else {
+      ci_list[[var]] <- c(NA, NA)  # Default to NA if COI is not in the CI results
+    }
+  } else {
+    # If COI is not found, store NA for betas, p-values, and CIs
+    beta_list[[var]] <- NA
+    p_values_list[[var]] <- NA
+    ci_list[[var]] <- c(NA, NA)
+  }
+}
+
+# Combine all p-values into a single vector, removing NAs
+all_p_values <- unlist(p_values_list)
+all_p_values <- all_p_values[!is.na(all_p_values)]
+
+# Adjust the p-values using the Benjamini-Yekutieli method
+adjusted_p_values <- p.adjust(all_p_values, method = "BY")
+
+# Rebuild the list with adjusted p-values, keeping the names
+adjusted_p_values_list <- setNames(as.list(adjusted_p_values), names(p_values_list))
+
+# Create a data frame to store the results
+results_cog_bs2 <- data.frame(
+  Outcome_Variable = names(beta_list),
+  COI_Beta = round(unlist(beta_list), 2),
+  COI_Beta_LowerCI = round(sapply(ci_list, `[`, 1), 2),  # Extract and round lower CI
+  COI_Beta_UpperCI = round(sapply(ci_list, `[`, 2), 2),  # Extract and round upper CI
+  P_Value = unlist(p_values_list),
+  Adjusted_P_Value = unlist(adjusted_p_values_list)
+)
+
+# Format p-values
+results_cog_bs2$P_Value <- ifelse(results_cog_bs2$P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_cog_bs2$P_Value))
+results_cog_bs2$Adjusted_P_Value <- ifelse(results_cog_bs2$Adjusted_P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_cog_bs2$Adjusted_P_Value))
+
+# Print the formatted results data frame
+print(results_cog_bs2)
+# Create the new column combining beta, lower CI, and upper CI
+results_cog_bs2$COI_Beta_CI <- paste0(
+  results_cog_bs2$COI_Beta, 
+  " (", 
+ results_cog_bs2$COI_Beta_LowerCI, 
+  ", ", 
+ results_cog_bs2$COI_Beta_UpperCI, 
+  ")"
+)
+
+# Replace the outcome variable names with neurocog_names
+results_cog_bs2$Outcome_Variable <- neurocog_names
+
+# Print the updated data frame with the new column
+print(results_cog_bs2)
+
+
+write.csv(results_cog_bs2, "D:/OneDrive/文档/ABCD study/COI and brain development/data/output/cog_basic_unstandarized.csv", row.names = FALSE)
+
+# Optionally, print summaries of each model
+for (var in neurocog_vars) {
+  cat("\nModel Summary for:", var, "\n")
+  print(summary(Basic_cog_models2[[var]]))
+}
+
+```
+
+## Figure 2
+```{r}
+neurocog_vars <- c(
+  "nihtbx_picvocab_uncorrected",
+  "nihtbx_flanker_uncorrected",
+  "nihtbx_list_uncorrected",
+  "nihtbx_cardsort_uncorrected",
+  "nihtbx_pattern_uncorrected",
+  "nihtbx_picture_uncorrected",
+  "nihtbx_reading_uncorrected",
+  "nihtbx_fluidcomp_uncorrected",
+  "nihtbx_cryst_uncorrected",
+  "nihtbx_totalcomp_uncorrected"
+)
+
+neurocog_names <- c("Verbal Ability", 
+                    "Attention Control", 
+                    "Working Memory", 
+                    "Cognitive Flexibility", 
+                    "Processing Speed", 
+                    "Episodic Memory", 
+                    "Reading Ability", 
+                    "Fluid Cognition", 
+                    "Crystallized Cognition", 
+                    "Composite Cognition")
+
+
+
+for (i in seq_along(neurocog_vars)) {
+  var <- neurocog_vars[i]
+  var_name <- neurocog_names[i]
+  adj_p_val <- results_cog_bs2$Adjusted_P_Value[i]
+  beta <- results_cog_bs2$COI_Beta[i]
+  ci_lower <- results_cog_bs2$COI_Beta_LowerCI[i]
+  ci_upper <- results_cog_bs2$COI_Beta_UpperCI[i]
+  
+  # Plotting the scatter plot with regression line
+  p <- ggplot(df_neurocog, aes(x = COI, y = .data[[var]])) +
+    geom_point(alpha = 0.5) +
+    geom_smooth(method = "lm", formula = y ~ x, color = "#0081a7", se = TRUE) +
+    labs(
+         x = "COI",
+         y = var_name) +
+    annotate("text", x = Inf, y = Inf, label = paste("FDR-corrected ", adj_p_val), hjust = 2.1, vjust = 1.5, size = 4, color = "black") +
+    geom_errorbar(aes(ymin = .data[[var]] - (beta - ci_lower), ymax = .data[[var]] + (ci_upper - beta)), width = 0.2, color = "orange") +
+    coord_cartesian(ylim = c(30, 150)) +
+    theme_minimal() + 
+    theme(
+    axis.line = element_line(size = 1.5, color = "black")  # Adjust the axis line width and color
+  )
+  
+  
+  filename <- paste0("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/figures/", var, ".jpg")
+  ggsave(filename, p, width = 6, height = 6, dpi = 800)
+  # Optionally, print the plot to the console
+  print(p)
+  
+}
+
+```
+
+
+# **scatter plot Figure
+```{r}
+# Load required libraries
+library(lme4)
+library(ggplot2)
+library(ggeffects)
+library(patchwork)  # For arranging multiple plots
+
+# Define variables and labels
+neurocog_vars <- c( 
+  "nihtbx_picvocab_uncorrected",
+  "nihtbx_flanker_uncorrected",
+  "nihtbx_list_uncorrected",
+  "nihtbx_cardsort_uncorrected",
+  "nihtbx_pattern_uncorrected",
+  "nihtbx_picture_uncorrected",
+  "nihtbx_reading_uncorrected",
+  "nihtbx_fluidcomp_uncorrected",
+  "nihtbx_cryst_uncorrected",
+  "nihtbx_totalcomp_uncorrected"
+)
+
+neurocog_names <- c("Verbal Ability", 
+                    "Attention Control", 
+                    "Working Memory", 
+                    "Cognitive Flexibility", 
+                    "Processing Speed", 
+                    "Episodic Memory", 
+                    "Reading Ability", 
+                    "Fluid Cognition", 
+                    "Crystallized Cognition", 
+                    "Composite Cognition")
+
+# Create an empty list to store plots
+plot_list <- list()
+
+# Loop through each neurocognitive outcome
+for (i in seq_along(neurocog_vars)) {
+  
+  outcome_var <- neurocog_vars[i]
+  y_label <- neurocog_names[i]
+  
+  # Fit the model for each outcome
+  model <- lmer(as.formula(paste0(outcome_var, " ~ COI + interview_age + demo_sex_v2 + 
+                                  (1 | site_id_l/rel_family_id)")), 
+                data = df_neurocog)
+  
+  # Get model predictions for COI
+  predicted_data <- ggpredict(model, terms = "COI")  # Marginal effects of COI
+  
+  # Create scatter plot with model predictions
+  p <- ggplot(df_neurocog, aes_string(x = "COI", y = outcome_var)) +
+    geom_point(alpha = 0.4, color = "black") +  # Scatter points
+    geom_line(data = predicted_data, aes(x = x, y = predicted), color = "blue", size = 1.2) +  # Model fit line
+    labs(x = "COI", y = y_label) +
+    theme_minimal() +
+    theme(
+      #plot.title = element_text(hjust = 0.5, size = 8, face = "bold"),
+      axis.text = element_text(size = 10)
+      #axis.title = element_text(size = 10)
+    )
+   
+  # Store plot in the list
+  plot_list[[i]] <- p
+}
+
+# Arrange all plots in a grid
+final_plot <- wrap_plots(plot_list, ncol = 2)  # Adjust number of columns as needed
+
+# Print the final combined plot
+print(final_plot)
+
+# Save the final combined plot as an A4-sized PDF or PNG
+ggsave("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/figures/scatter_plots_A4_cog.pdf", final_plot, width = 8.27, height = 11.69, units = "in")  # A4 Portrait Mode
+ggsave("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/figures/scatter_plots_A4_cog.png", final_plot, width = 8.27, height = 11.69, units = "in", dpi = 500)  # High-resolution PNG
+
+# Print the final combined plot
+print(final_plot)
+
+```
+
+
+```{r}
+# Load required libraries
+library(lme4)
+library(ggplot2)
+library(ggeffects)
+library(patchwork)  # For arranging multiple plots
+library(gridExtra)  # For better layout handling
+library(grid)  # Required for textGrob()
+
+
+# Define neurocognitive outcome variables and labels
+neurocog_vars <- c( 
+  "nihtbx_picvocab_uncorrected",
+  "nihtbx_flanker_uncorrected",
+  "nihtbx_list_uncorrected",
+  "nihtbx_cardsort_uncorrected",
+  "nihtbx_pattern_uncorrected",
+  "nihtbx_picture_uncorrected",
+  "nihtbx_reading_uncorrected",
+  "nihtbx_fluidcomp_uncorrected",
+  "nihtbx_cryst_uncorrected",
+  "nihtbx_totalcomp_uncorrected"
+)
+
+neurocog_names <- c("Verbal Ability", 
+                    "Attention Control", 
+                    "Working Memory", 
+                    "Cognitive Flexibility", 
+                    "Processing Speed", 
+                    "Episodic Memory", 
+                    "Reading Ability", 
+                    "Fluid Cognition", 
+                    "Crystallized Cognition", 
+                    "Composite Cognition")
+
+# Create an empty list to store plots
+plot_list <- list()
+
+# Loop through each neurocognitive outcome
+for (i in seq_along(neurocog_vars)) {
+  
+  outcome_var <- neurocog_vars[i]
+  y_label <- neurocog_names[i]
+  
+  # Fit Basic Model
+  model_basic <- lmer(as.formula(paste0(outcome_var, " ~ COI + interview_age + demo_sex_v2 + 
+                                  (1 | site_id_l/rel_family_id)")), 
+                data = df_neurocog)
+  
+  # Fit Full Model
+  model_full <- lmer(as.formula(paste0(outcome_var, " ~ COI + interview_age + demo_sex_v2 + 
+                                  P_EDU + FC + MH + (1 | site_id_l/rel_family_id)")), 
+                data = df_neurocog)
+  
+  # Get predictions for COI in both models
+  pred_basic <- ggpredict(model_basic, terms = "COI")  
+  pred_full  <- ggpredict(model_full, terms = "COI")  
+
+  # Create scatter plot for Basic Model
+  p_basic <- ggplot(df_neurocog, aes_string(x = "COI", y = outcome_var)) +
+    geom_point(alpha = 0.4, color = "black") +  # Scatter points
+    geom_line(data = pred_basic, aes(x = x, y = predicted), color = "blue", size = 1.2) +  # Model fit line
+    labs(x = "COI", y = y_label, title = "Basic Model") +  # Title changed
+    theme_minimal() +
+    theme(
+      plot.title = element_text(hjust = 0.5, size = 8, face = "bold"),
+      axis.text = element_text(size = 8),
+      axis.title = element_text(size = 8)
+    )
+  
+  # Create scatter plot for Full Model
+  p_full <- ggplot(df_neurocog, aes_string(x = "COI", y = outcome_var)) +
+    geom_point(alpha = 0.4, color = "black") +  # Scatter points
+    geom_line(data = pred_full, aes(x = x, y = predicted), color = "Blue", size = 1.2) +  # Model fit line
+    labs(x = "COI", y = y_label, title = "Full Model") +  # Title changed
+    theme_minimal() +
+    theme(
+      plot.title = element_text(hjust = 0.5, size = 8, face = "bold"),
+      axis.text = element_text(size = 8),
+      axis.title = element_text(size = 8)
+    )
+  
+  # Combine both plots side by side with labels
+  combined_plot <- grid.arrange(p_basic, p_full, ncol = 2)
+  
+  # Store the combined plot in the list
+  plot_list[[i]] <- combined_plot
+}
+
+# Arrange all plots in a grid (A4 fits 2 columns)
+final_plot <- marrangeGrob(plot_list, ncol = 1, nrow = length(neurocog_vars))
+
+# Save the final combined plot as an A4-sized PDF or PNG
+#ggsave("scatter_plots_A4.pdf", final_plot, width = 8.27, height = 11.69, units = "in")  # A4 Portrait Mode
+ggsave("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/figures/scatter_plots_A4_cog.png", final_plot, width = 8.27, height = 23, units = "in", dpi = 500)  # High-resolution PNG
+
+# Print the final combined plot
+print(final_plot)
+
+```
+
+## whole brain measures
+
+```{r}
+
+# Load required libraries
+library(lme4)
+library(ggplot2)
+library(ggeffects)
+library(gridExtra)
+library(grid)
+
+# Define whole-brain measure variables and labels
+whole_brain_var <- c("smri_vol_cdk_total", "smri_area_cdk_total", "smri_thick_cdk_mean")
+whole_brain_name <- c("Cortical Gray Matter Volume", "Total Cortical Surface Area", "Mean Cortical Thickness")
+
+# Create an empty list to store plots
+plot_list <- list()
+
+# Loop through each whole-brain measure
+for (i in seq_along(whole_brain_var)) {
+  
+  outcome_var <- whole_brain_var[i]
+  y_label <- whole_brain_name[i]
+  
+  # Fit Basic Model
+  model_basic <- lmer(as.formula(paste0(outcome_var, " ~ COI + interview_age + demo_sex_v2 + ICV_scaled +
+                                  (1 | site_id_l/rel_family_id)")), 
+                      data = df_mri)
+  
+  # Fit Full Model
+  model_full <- lmer(as.formula(paste0(outcome_var, " ~ COI + interview_age + demo_sex_v2 + 
+                                  ICV_scaled + P_EDU + FC + MH + (1 | site_id_l/rel_family_id)")), 
+                     data = df_mri)
+  
+  # Get predictions for COI in both models
+  pred_basic <- ggpredict(model_basic, terms = "COI")  
+  pred_full  <- ggpredict(model_full, terms = "COI")  
+
+  # Create scatter plot for Basic Model
+  p_basic <- ggplot(df_mri, aes_string(x = "COI", y = outcome_var)) +
+    geom_point(alpha = 0.4, color = "black") +  # Scatter points
+    geom_line(data = pred_basic, aes(x = x, y = predicted), color = "blue", size = 1.2) +  # Model fit line
+    labs(x = "COI", y = y_label, title = "Basic Model") +  # Title changed
+    theme_minimal() +
+    theme(
+      plot.title = element_text(hjust = 0.5, size = 8, face = "bold"),
+      axis.text = element_text(size = 8),
+      axis.title = element_text(size = 8)
+    )
+  
+  # Create scatter plot for Full Model
+  p_full <- ggplot(df_mri, aes_string(x = "COI", y = outcome_var)) +
+    geom_point(alpha = 0.4, color = "black") +  # Scatter points
+    geom_line(data = pred_full, aes(x = x, y = predicted), color = "blue", size = 1.2) +  # Model fit line
+    labs(x = "COI", y = y_label, title = "Full Model") +  # Title changed
+    theme_minimal() +
+    theme(
+      plot.title = element_text(hjust = 0.5, size = 8, face = "bold"),
+      axis.text = element_text(size = 8),
+      axis.title = element_text(size = 8)
+    )
+  
+  # Combine both plots side by side
+  combined_plot <- grid.arrange(p_basic, p_full, ncol = 2 
+                                )
+  
+  # Store the combined plot in the list
+  plot_list[[i]] <- combined_plot
+}
+
+# Arrange all plots in a grid (A4 fits 2 columns)
+final_plot <- marrangeGrob(plot_list, ncol = 1, nrow = length(whole_brain_var))
+
+# Save the final combined plot as an A4-sized PNG
+ggsave("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/figures/scatter_plots_A4_Whole_brain.png", 
+       final_plot, width = 8.27, height = 12, units = "in", dpi = 500)  # High-resolution PNG
+
+# Print the final combined plot
+print(final_plot)
+
+```
+
+## Scatter: ROI measures
+```{r}
+
+# Load required libraries
+library(lme4)
+library(ggplot2)
+library(ggeffects)
+library(gridExtra)
+library(grid)
+
+ROI_var <- c(
+    "DLPFC_vol_mean", "DLPFC_area_mean", "DLPFC_thick_mean", 
+  "ACC_vol_mean", "ACC_area_mean", "ACC_thick_mean", 
+  "IFG_vol_mean", "IFG_area_mean", "IFG_thick_mean",
+  "Insula_vol_mean", "Insula_area_mean", "Insula_thick_mean"
+)
+ROI_brain_name <-  c("DLPFC Volume", "DLPFC Surface Area", "DLPFC Thickness",
+  "ACC Volume", "ACC Surface Area", "ACC Thickness",
+  "IFG Volume", "IFG Surface Area", "IFG Thickness",
+  "Insula Volume", "Insula Surface Area", "Insula Thickness")
+
+# Create an empty list to store plots
+plot_list <- list()
+
+# Loop through each whole-brain measure
+for (i in seq_along(ROI_var)) {
+  
+  outcome_var <- ROI_var[i]
+  y_label <- ROI_brain_name[i]
+  
+  # Fit Basic Model
+  model_basic <- lmer(as.formula(paste0(outcome_var, " ~ COI + interview_age + demo_sex_v2 + ICV_scaled +
+                                  (1 | site_id_l/rel_family_id)")), 
+                      data = df_mri)
+  
+  # Fit Full Model
+  model_full <- lmer(as.formula(paste0(outcome_var, " ~ COI + interview_age + demo_sex_v2 + 
+                                  ICV_scaled + P_EDU + FC + MH + (1 | site_id_l/rel_family_id)")), 
+                     data = df_mri)
+  
+  # Get predictions for COI in both models
+  pred_basic <- ggpredict(model_basic, terms = "COI")  
+  pred_full  <- ggpredict(model_full, terms = "COI")  
+
+  # Create scatter plot for Basic Model
+  p_basic <- ggplot(df_mri, aes_string(x = "COI", y = outcome_var)) +
+    geom_point(alpha = 0.4, color = "black") +  # Scatter points
+    geom_line(data = pred_basic, aes(x = x, y = predicted), color = "blue", size = 1.2) +  # Model fit line
+    labs(x = "COI", y = y_label, title = "Basic Model") +  # Title changed
+    theme_minimal() +
+    theme(
+      plot.title = element_text(hjust = 0.5, size = 8, face = "bold"),
+      axis.text = element_text(size = 8),
+      axis.title = element_text(size = 8)
+    )
+  
+  # Create scatter plot for Full Model
+  p_full <- ggplot(df_mri, aes_string(x = "COI", y = outcome_var)) +
+    geom_point(alpha = 0.4, color = "black") +  # Scatter points
+    geom_line(data = pred_full, aes(x = x, y = predicted), color = "blue", size = 1.2) +  # Model fit line
+    labs(x = "COI", y = y_label, title = "Full Model") +  # Title changed
+    theme_minimal() +
+    theme(
+      plot.title = element_text(hjust = 0.5, size = 8, face = "bold"),
+      axis.text = element_text(size = 8),
+      axis.title = element_text(size = 8)
+    )
+  
+  # Combine both plots side by side
+  combined_plot <- grid.arrange(p_basic, p_full, ncol = 2 
+                                )
+  
+  # Store the combined plot in the list
+  plot_list[[i]] <- combined_plot
+}
+
+# Arrange all plots in a grid (A4 fits 2 columns)
+final_plot <- marrangeGrob(plot_list, ncol = 1, nrow = length(ROI_var))
+
+# Save the final combined plot as an A4-sized PNG
+ggsave("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/figures/scatter_plots_A4_ROI.png", 
+       final_plot, width = 8.27, height = 36, units = "in", dpi = 500)  # High-resolution PNG
+
+# Print the final combined plot
+print(final_plot)
+
+```
+
+
+## standarized all variables
+
+below are models using standarized all variables
+```{r}
+# contious variables
+con_vars <- c("COI","P_EDU","FC","MH","interview_age")
+for (var in con_vars) {
+  # Scale the variable and convert to a numeric vector
+  df_neurocog[[paste0(var, "_scaled")]] <- as.numeric(scale(df_neurocog[[var]]))
+}
+
+# Define the list of neurocognitive variables
+neurocog_vars <- c(
+  "nihtbx_picvocab_uncorrected",
+  "nihtbx_flanker_uncorrected",
+  "nihtbx_list_uncorrected",
+  "nihtbx_cardsort_uncorrected",
+  "nihtbx_pattern_uncorrected",
+  "nihtbx_picture_uncorrected",
+  "nihtbx_reading_uncorrected",
+  "nihtbx_fluidcomp_uncorrected",
+  "nihtbx_cryst_uncorrected",
+  "nihtbx_totalcomp_uncorrected"
+)
+
+scaled_neurocog_vars <- list()
+
+for (var in neurocog_vars) {
+  # Scale the variable and convert to a numeric vector
+  scaled_var_name <- paste0(var, "_scaled")
+  df_neurocog[[scaled_var_name]] <- as.numeric(scale(df_neurocog[[var]]))
+  
+  # Store the name of the scaled variable in the list
+  scaled_neurocog_vars <- c(scaled_neurocog_vars, scaled_var_name)
+}
+
+# View the list of scaled variable names
+print(scaled_neurocog_vars)
+
+# Initialize lists to store the models, p-values, CIs, and betas
+Basic_cog_models <- list()
+p_values_list <- list()
+beta_list <- list()
+ci_list <- list()
+
+# Loop over each cognitive variable and fit a separate LMM
+for (var in  scaled_neurocog_vars) {
+  # Create the formula for the current model
+  formula <- as.formula(paste(var, "~ COI_scaled + interview_age_scaled + demo_sex_v2 +",
+                              "(1 | site_id_l/rel_family_id)"))
+  
+  # Fit the LMM for the current cognitive variable
+  model <- lmer(formula, data = df_neurocog)
+  
+  # Store the model in the list
+  Basic_cog_models[[var]] <- model
+  
+  # Extract the summary of the model
+  model_summary <- summary(model)
+  
+  # Extract the p-values for fixed effects
+  p_values_df <- model_summary$coefficients
+  
+  # Check if COI is in the fixed effects
+  if ("COI_scaled" %in% rownames(p_values_df)) {
+    # Extract the beta and p-value for COI
+    beta_list[[var]] <- p_values_df["COI_scaled", "Estimate"]
+    p_values_list[[var]] <- p_values_df["COI_scaled", "Pr(>|t|)"]
+    
+    # Extract confidence intervals for the model parameters
+    conf_intervals <- confint(model, method = "Wald")  # Wald method is used for fixed effects
+    
+    # Handle cases where confidence intervals might not be properly formed
+    if ("COI_scaled" %in% rownames(conf_intervals)) {
+      ci <- conf_intervals["COI_scaled", ]
+      if (length(ci) == 2) {  # Ensure there are exactly two elements (lower and upper CI)
+        ci_list[[var]] <- ci
+      } else {
+        ci_list[[var]] <- c(NA, NA)  # Default to NA if confidence interval is not as expected
+      }
+    } else {
+      ci_list[[var]] <- c(NA, NA)  # Default to NA if COI is not in the CI results
+    }
+  } else {
+    # If COI is not found, store NA for betas, p-values, and CIs
+    beta_list[[var]] <- NA
+    p_values_list[[var]] <- NA
+    ci_list[[var]] <- c(NA, NA)
+  }
+}
+
+# Combine all p-values into a single vector, removing NAs
+all_p_values <- unlist(p_values_list)
+all_p_values <- all_p_values[!is.na(all_p_values)]
+
+# Adjust the p-values using the Benjamini-Yekutieli method
+adjusted_p_values <- p.adjust(all_p_values, method = "BY")
+
+# Rebuild the list with adjusted p-values, keeping the names
+adjusted_p_values_list <- setNames(as.list(adjusted_p_values), names(p_values_list))
+
+# Create a data frame to store the results
+results_df <- data.frame(
+  Outcome_Variable = names(beta_list),
+  COI_Beta = round(unlist(beta_list), 2),
+  COI_Beta_LowerCI = round(sapply(ci_list, `[`, 1), 2),  # Extract and round lower CI
+  COI_Beta_UpperCI = round(sapply(ci_list, `[`, 2), 2),  # Extract and round upper CI
+  P_Value = unlist(p_values_list),
+  Adjusted_P_Value = unlist(adjusted_p_values_list)
+)
+
+# Format p-values
+results_df$P_Value <- ifelse(results_df$P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$P_Value))
+results_df$Adjusted_P_Value <- ifelse(results_df$Adjusted_P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$Adjusted_P_Value))
+
+# Create the new column combining beta, lower CI, and upper CI
+results_df$COI_Beta_CI <- paste0(
+  results_df$COI_Beta, 
+  " (", 
+  results_df$COI_Beta_LowerCI, 
+  ", ", 
+  results_df$COI_Beta_UpperCI, 
+  ")"
+)
+
+# Replace the outcome variable names with neurocog_names
+results_df$Outcome_Variable <- neurocog_names
+
+# Print the updated data frame with the new column
+print(results_df)
+
+
+write.csv(results_df, "D:/OneDrive/文档/ABCD study/COI and brain development/data/output/cog_basic_standarized.csv", row.names = FALSE)
+
+# Optionally, print summaries of each model
+#for (var in neurocog_vars) {
+#  cat("\nModel Summary for:", var, "\n")
+#  print(summary(Basic_cog_models[[var]]))
+#}
+
+
+```
+
+
+
+# Cognitive function-Fully adjusted model
+
+
+### unstandarized beta
+```{r}
+covars_cog <- c("interview_age","demo_sex_v2","P_EDU","FC","MH")
+
+# Initialize a list to store the models
+Full_cog_models1 <- list()
+
+p_values_list <- list()
+beta_list <- list()
+ci_list <- list()
+PEDU_beta_list <- list()
+PEDU_p_list <- list()
+FC_beta_list <- list()
+FC_p_list <- list()
+MH_beta_list <- list()
+MH_p_list <- list()
+
+# Loop over each cognitive variable and fit a separate LMM
+for (var in neurocog_vars) {
+  # Create the formula for the current model
+  formula <- as.formula(paste(var, "~ COI + interview_age + demo_sex_v2 + P_EDU + FC + MH + (1 | site_id_l/rel_family_id)"))
+  
+  # Fit the LMM for the current cognitive variable
+  model <- lmer(formula, data = df_neurocog)
+  
+  # Store the model in the list
+  Full_cog_models1[[var]] <- model
+  
+  # Extract the summary of the model
+  model_summary <- summary(model)
+  
+  # Extract the p-values for fixed effects
+  p_values_df <- model_summary$coefficients
+  
+  # Check if COI is in the fixed effects
+  if ("COI" %in% rownames(p_values_df)) {
+    # Extract the beta and p-value for COI
+    beta_list[[var]] <- p_values_df["COI", "Estimate"]
+    p_values_list[[var]] <- p_values_df["COI", "Pr(>|t|)"]
+    
+    # Extract confidence intervals for the model parameters
+    conf_intervals <- confint(model, method = "Wald")  # Wald method is used for fixed effects
+    
+    # Handle cases where confidence intervals might not be properly formed
+    if ("COI" %in% rownames(conf_intervals)) {
+      ci <- conf_intervals["COI", ]
+      if (length(ci) == 2) {  # Ensure there are exactly two elements (lower and upper CI)
+        ci_list[[var]] <- ci
+      } else {
+        ci_list[[var]] <- c(NA, NA)  # Default to NA if confidence interval is not as expected
+      }
+    } else {
+      ci_list[[var]] <- c(NA, NA)  # Default to NA if COI is not in the CI results
+    }
+  } else {
+    # If COI is not found, store NA for betas, p-values, and CIs
+    beta_list[[var]] <- NA
+    p_values_list[[var]] <- NA
+    ci_list[[var]] <- c(NA, NA)
+  }
+
+# Extract P_EDU, FC, and MH beta and p-values
+  PEDU_beta_list[[var]] <- if ("P_EDU" %in% rownames(model_summary$coefficients)) model_summary$coefficients["P_EDU", "Estimate"] else NA
+  PEDU_p_list[[var]] <- if ("P_EDU" %in% rownames(model_summary$coefficients)) model_summary$coefficients["P_EDU", "Pr(>|t|)"] else NA
+  
+  FC_beta_list[[var]] <- if ("FC" %in% rownames(model_summary$coefficients)) model_summary$coefficients["FC", "Estimate"] else NA
+  FC_p_list[[var]] <- if ("FC" %in% rownames(model_summary$coefficients)) model_summary$coefficients["FC", "Pr(>|t|)"] else NA
+  
+  MH_beta_list[[var]] <- if ("MH" %in% rownames(model_summary$coefficients)) model_summary$coefficients["MH", "Estimate"] else NA
+  MH_p_list[[var]] <- if ("MH" %in% rownames(model_summary$coefficients)) model_summary$coefficients["MH", "Pr(>|t|)"] else NA
+}
+
+# Combine all p-values into a single vector, removing NAs
+all_p_values <- unlist(p_values_list)
+all_p_values <- all_p_values[!is.na(all_p_values)]
+
+# Adjust the p-values using the Benjamini-Yekutieli method
+adjusted_p_values <- p.adjust(all_p_values, method = "BY")
+
+# Rebuild the list with adjusted p-values, keeping the names
+adjusted_p_values_list <- setNames(as.list(adjusted_p_values), names(p_values_list))
+
+# Create a data frame to store the results
+results_df <- data.frame(
+  Outcome_Variable = names(beta_list),
+  COI_Beta = round(unlist(beta_list), 2),
+  COI_Beta_LowerCI = round(sapply(ci_list, `[`, 1), 2),  # Extract and round lower CI
+  COI_Beta_UpperCI = round(sapply(ci_list, `[`, 2), 2),  # Extract and round upper CI
+  P_Value = unlist(p_values_list),
+  Adjusted_P_Value = unlist(adjusted_p_values_list),
+  PEDU_Beta = round(unlist(PEDU_beta_list), 2),
+  PEDU_p = unlist(PEDU_p_list),
+  FC_Beta = round(unlist(FC_beta_list), 2),
+  FC_p = unlist(FC_p_list),
+  MH_Beta = round(unlist(MH_beta_list), 2),
+  MH_p = unlist(MH_p_list)
+)
+
+# Format p-values
+results_df$P_Value <- ifelse(results_df$P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$P_Value))
+results_df$Adjusted_P_Value <- ifelse(results_df$Adjusted_P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$Adjusted_P_Value))
+
+results_df$PEDU_p <- ifelse(results_df$PEDU_p < 0.001, "p < 0.001", sprintf("%.3f", results_df$PEDU_p))
+results_df$FC_p <- ifelse(results_df$FC_p < 0.001, "p < 0.001", sprintf("%.3f", results_df$FC_p))
+results_df$MH_p <- ifelse(results_df$MH_p < 0.001, "p < 0.001", sprintf("%.3f", results_df$MH_p))
+
+# Create the new column combining beta, lower CI, and upper CI
+results_df$COI_Beta_CI <- paste0(
+  results_df$COI_Beta, 
+  " (", 
+  results_df$COI_Beta_LowerCI, 
+  ", ", 
+  results_df$COI_Beta_UpperCI, 
+  ")"
+)
+# Print the formatted results data frame
+results_df$Outcome_Variable <- neurocog_names
+print(results_df)
+
+write.csv(results_df, "D:/OneDrive/文档/ABCD study/COI and brain development/data/output/cog_full_unstandarized.csv", row.names = FALSE)
+
+# Optionally, print summaries of each model
+#for (var in neurocog_vars) {
+#  cat("\nModel Summary for:", var, "\n")
+#  print(summary(Full_cog_models1[[var]]))
+#}
+
+
+```
+
+### standarized beta
+```{r}
+# Initialize a list to store the models
+Full_cog_models2 <- list()
+
+p_values_list <- list()
+beta_list <- list()
+ci_list <- list()
+PEDU_beta_list <- list()
+PEDU_p_list <- list()
+FC_beta_list <- list()
+FC_p_list <- list()
+MH_beta_list <- list()
+MH_p_list <- list()
+
+# Loop over each cognitive variable and fit a separate LMM
+for (var in scaled_neurocog_vars) {
+  # Create the formula for the current model
+  formula <- as.formula(paste(var, "~ COI_scaled + interview_age_scaled + demo_sex_v2 + P_EDU_scaled + FC_scaled + MH_scaled + (1 | site_id_l/rel_family_id)"))
+  
+  # Fit the LMM for the current cognitive variable
+  model <- lmer(formula, data = df_neurocog)
+  
+  # Store the model in the list
+  Full_cog_models2[[var]] <- model
+  
+  # Extract the summary of the model
+  model_summary <- summary(model)
+  
+  # Extract the p-values for fixed effects
+  p_values_df <- model_summary$coefficients
+  
+  # Check if COI is in the fixed effects
+  if ("COI_scaled" %in% rownames(p_values_df)) {
+    # Extract the beta and p-value for COI
+    beta_list[[var]] <- p_values_df["COI_scaled", "Estimate"]
+    p_values_list[[var]] <- p_values_df["COI_scaled", "Pr(>|t|)"]
+    
+    # Extract confidence intervals for the model parameters
+    conf_intervals <- confint(model, method = "Wald")  # Wald method is used for fixed effects
+    
+    # Handle cases where confidence intervals might not be properly formed
+    if ("COI_scaled" %in% rownames(conf_intervals)) {
+      ci <- conf_intervals["COI_scaled", ]
+      if (length(ci) == 2) {  # Ensure there are exactly two elements (lower and upper CI)
+        ci_list[[var]] <- ci
+      } else {
+        ci_list[[var]] <- c(NA, NA)  # Default to NA if confidence interval is not as expected
+      }
+    } else {
+      ci_list[[var]] <- c(NA, NA)  # Default to NA if COI is not in the CI results
+    }
+  } else {
+    # If COI is not found, store NA for betas, p-values, and CIs
+    beta_list[[var]] <- NA
+    p_values_list[[var]] <- NA
+    ci_list[[var]] <- c(NA, NA)
+  }
+# Extract P_EDU, FC, and MH beta and p-values
+  PEDU_beta_list[[var]] <- if ("P_EDU_scaled" %in% rownames(model_summary$coefficients)) model_summary$coefficients["P_EDU_scaled", "Estimate"] else NA
+  PEDU_p_list[[var]] <- if ("P_EDU_scaled" %in% rownames(model_summary$coefficients)) model_summary$coefficients["P_EDU_scaled", "Pr(>|t|)"] else NA
+  
+  FC_beta_list[[var]] <- if ("FC_scaled" %in% rownames(model_summary$coefficients)) model_summary$coefficients["FC_scaled", "Estimate"] else NA
+  FC_p_list[[var]] <- if ("FC_scaled" %in% rownames(model_summary$coefficients)) model_summary$coefficients["FC_scaled", "Pr(>|t|)"] else NA
+  
+  MH_beta_list[[var]] <- if ("MH_scaled" %in% rownames(model_summary$coefficients)) model_summary$coefficients["MH_scaled", "Estimate"] else NA
+  MH_p_list[[var]] <- if ("MH_scaled" %in% rownames(model_summary$coefficients)) model_summary$coefficients["MH_scaled", "Pr(>|t|)"] else NA
+}
+
+# Combine all p-values into a single vector, removing NAs
+all_p_values <- unlist(p_values_list)
+all_p_values <- all_p_values[!is.na(all_p_values)]
+
+# Adjust the p-values using the Benjamini-Yekutieli method
+adjusted_p_values <- p.adjust(all_p_values, method = "BY")
+
+# Rebuild the list with adjusted p-values, keeping the names
+adjusted_p_values_list <- setNames(as.list(adjusted_p_values), names(p_values_list))
+
+# Create a data frame to store the results
+results_df <- data.frame(
+  Outcome_Variable = names(beta_list),
+  COI_Beta = round(unlist(beta_list), 2),
+  COI_Beta_LowerCI = round(sapply(ci_list, `[`, 1), 2),  # Extract and round lower CI
+  COI_Beta_UpperCI = round(sapply(ci_list, `[`, 2), 2),  # Extract and round upper CI
+  P_Value = unlist(p_values_list),
+  Adjusted_P_Value = unlist(adjusted_p_values_list),
+  PEDU_Beta = round(unlist(PEDU_beta_list), 2),
+  PEDU_p = unlist(PEDU_p_list),
+  FC_Beta = round(unlist(FC_beta_list), 2),
+  FC_p = unlist(FC_p_list),
+  MH_Beta = round(unlist(MH_beta_list), 2),
+  MH_p = unlist(MH_p_list)
+)
+
+# Format p-values
+results_df$P_Value <- ifelse(results_df$P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$P_Value))
+results_df$Adjusted_P_Value <- ifelse(results_df$Adjusted_P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$Adjusted_P_Value))
+
+results_df$PEDU_p <- ifelse(results_df$PEDU_p < 0.001, "p < 0.001", sprintf("%.3f", results_df$PEDU_p))
+results_df$FC_p <- ifelse(results_df$FC_p < 0.001, "p < 0.001", sprintf("%.3f", results_df$FC_p))
+results_df$MH_p <- ifelse(results_df$MH_p < 0.001, "p < 0.001", sprintf("%.3f", results_df$MH_p))
+
+# Create the new column combining beta, lower CI, and upper CI
+results_df$COI_Beta_CI <- paste0(
+  results_df$COI_Beta, 
+  " (", 
+  results_df$COI_Beta_LowerCI, 
+  ", ", 
+  results_df$COI_Beta_UpperCI, 
+  ")"
+)
+# Print the formatted results data frame
+results_df$Outcome_Variable <- neurocog_names
+print(results_df)
+write.csv(results_df, "D:/OneDrive/文档/ABCD study/COI and brain development/data/output/cog_full_standarized.csv", row.names = FALSE)
+
+# Optionally, print summaries of each model
+#for (var in neurocog_vars) {
+#  cat("\nModel Summary for:", var, "\n")
+#  print(summary(Full_cog_models2[[var]]))
+#}
+```
+
+
+
+
+# The whole brain- basic adjusted model
+
+### Checking sMRI data
+```{r}
+df_mri <- subset(df,imgincl_t1w_include==1)
+
+sMRI_var <- c("smri_vol_cdk_total","smri_thick_cdk_mean","smri_area_cdk_total")
+complete_rows <- !apply(df[sMRI_var], 1, anyNA)
+
+# Create a new dataframe with only complete rows
+df_mri <- df[complete_rows, ]
+
+```
+
+
+### standardize all the prediction variables as the ICV is too large
+```{r}
+# contious variables
+con_vars <- c("COI","P_EDU","FC","MH","ICV","interview_age")
+for (var in con_vars) {
+  # Scale the variable and convert to a numeric vector
+  df_mri[[paste0(var, "_scaled")]] <- as.numeric(scale(df_mri[[var]]))
+}
+
+# scale all the outcomes
+whole_brain_var <- c("smri_thick_cdk_mean","smri_vol_cdk_total","smri_area_cdk_total")
+scaled_whole_brain_var <- list()
+
+for (var in whole_brain_var) {
+  # Scale the variable and convert to a numeric vector
+  scaled_var_name <- paste0(var, "_scaled")
+  df_mri[[scaled_var_name]] <- as.numeric(scale(df_mri[[var]]))
+  
+  # Store the name of the scaled variable in the list
+  scaled_whole_brain_var <- c(scaled_whole_brain_var, scaled_var_name)
+}
+
+print(scaled_whole_brain_var)
+```
+
+
+### unstandrized beta
+```{r}
+whole_brain_var <- c("smri_thick_cdk_mean","smri_vol_cdk_total","smri_area_cdk_total")
+
+Basic_whole_brain1 <- list()
+p_values_list <- list()
+beta_list <- list()
+ci_list <- list()
+
+# Loop over each the whole brain variable and fit a separate LMM
+for (var in whole_brain_var) {
+  # Create the formula for the current model
+  formula <- as.formula(paste(var, "~ COI + interview_age + demo_sex_v2 + ICV_scaled +",
+                              "(1 | site_id_l/rel_family_id)"))
+  
+  # Fit the LMM for the current cognitive variable
+  model <- lmer(formula, data = df_mri)
+  
+  # Store the model in the list
+  Basic_whole_brain1[[var]] <- model
+  
+  # Extract the summary of the model
+  model_summary <- summary(model)
+  
+  # Extract the p-values for fixed effects
+  p_values_df <- model_summary$coefficients
+  
+  # Check if COI is in the fixed effects
+  if ("COI" %in% rownames(p_values_df)) {
+    # Extract the beta and p-value for COI
+    beta_list[[var]] <- p_values_df["COI", "Estimate"]
+    p_values_list[[var]] <- p_values_df["COI", "Pr(>|t|)"]
+    
+    # Extract confidence intervals for the model parameters
+    conf_intervals <- confint(model, method = "Wald")  # Wald method is used for fixed effects
+    
+    # Handle cases where confidence intervals might not be properly formed
+    if ("COI" %in% rownames(conf_intervals)) {
+      ci <- conf_intervals["COI", ]
+      if (length(ci) == 2) {  # Ensure there are exactly two elements (lower and upper CI)
+        ci_list[[var]] <- ci
+      } else {
+        ci_list[[var]] <- c(NA, NA)  # Default to NA if confidence interval is not as expected
+      }
+    } else {
+      ci_list[[var]] <- c(NA, NA)  # Default to NA if COI is not in the CI results
+    }
+  } else {
+    # If COI is not found, store NA for betas, p-values, and CIs
+    beta_list[[var]] <- NA
+    p_values_list[[var]] <- NA
+    ci_list[[var]] <- c(NA, NA)
+  }
+}
+
+# Combine all p-values into a single vector, removing NAs
+all_p_values <- unlist(p_values_list)
+all_p_values <- all_p_values[!is.na(all_p_values)]
+
+# Adjust the p-values using the Benjamini-Yekutieli method
+adjusted_p_values <- p.adjust(all_p_values, method = "BY")
+
+# Rebuild the list with adjusted p-values, keeping the names
+adjusted_p_values_list <- setNames(as.list(adjusted_p_values), names(p_values_list))
+
+# Create a data frame to store the results
+results_df <- data.frame(
+  Outcome_Variable = names(beta_list),
+  COI_Beta = round(unlist(beta_list), 2),
+  COI_Beta_LowerCI = round(sapply(ci_list, `[`, 1), 2),  # Extract and round lower CI
+  COI_Beta_UpperCI = round(sapply(ci_list, `[`, 2), 2),  # Extract and round upper CI
+  P_Value = unlist(p_values_list),
+  Adjusted_P_Value = unlist(adjusted_p_values_list)
+)
+
+# Format p-values
+results_df$P_Value <- ifelse(results_df$P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$P_Value))
+results_df$Adjusted_P_Value <- ifelse(results_df$Adjusted_P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$Adjusted_P_Value))
+
+results_df$COI_Beta_CI <- paste0(
+  results_df$COI_Beta, 
+  " (", 
+  results_df$COI_Beta_LowerCI, 
+  ", ", 
+  results_df$COI_Beta_UpperCI, 
+  ")"
+)
+# Print the formatted results data frame
+print(results_df)
+
+write.csv(results_df, "D:/OneDrive/文档/ABCD study/COI and brain development/data/output/whole_basic_unstandarized.csv", row.names = FALSE)
+
+# Optionally, print summaries of each model
+#for (var in whole_brain_var) {
+#  cat("\nModel Summary for:", var, "\n")
+#  print(summary( Basic_whole_brain1[[var]]))
+#}
+
+
+```
+
+
+### standarized beta
+```{r}
+Basic_whole_brain2 <- list()
+p_values_list <- list()
+beta_list <- list()
+ci_list <- list()
+
+# Loop over each the whole brain variable and fit a separate LMM
+for (var in scaled_whole_brain_var) {
+  # Create the formula for the current model
+  formula <- as.formula(paste(var, "~ COI_scaled + interview_age_scaled + demo_sex_v2 + ICV_scaled + (1 | site_id_l/rel_family_id)"))
+  
+  # Fit the LMM for the current cognitive variable
+  model <- lmer(formula, data = df_mri)
+  
+  # Store the model in the list
+  Basic_whole_brain2[[var]] <- model
+  
+  # Extract the summary of the model
+  model_summary <- summary(model)
+  
+  # Extract the p-values for fixed effects
+  p_values_df <- model_summary$coefficients
+  
+  # Check if COI is in the fixed effects
+  if ("COI_scaled" %in% rownames(p_values_df)) {
+    # Extract the beta and p-value for COI
+    beta_list[[var]] <- p_values_df["COI_scaled", "Estimate"]
+    p_values_list[[var]] <- p_values_df["COI_scaled", "Pr(>|t|)"]
+    
+    # Extract confidence intervals for the model parameters
+    conf_intervals <- confint(model, method = "Wald")  # Wald method is used for fixed effects
+    
+    # Handle cases where confidence intervals might not be properly formed
+    if ("COI_scaled" %in% rownames(conf_intervals)) {
+      ci <- conf_intervals["COI_scaled", ]
+      if (length(ci) == 2) {  # Ensure there are exactly two elements (lower and upper CI)
+        ci_list[[var]] <- ci
+      } else {
+        ci_list[[var]] <- c(NA, NA)  # Default to NA if confidence interval is not as expected
+      }
+    } else {
+      ci_list[[var]] <- c(NA, NA)  # Default to NA if COI is not in the CI results
+    }
+  } else {
+    # If COI is not found, store NA for betas, p-values, and CIs
+    beta_list[[var]] <- NA
+    p_values_list[[var]] <- NA
+    ci_list[[var]] <- c(NA, NA)
+  }
+}
+
+# Combine all p-values into a single vector, removing NAs
+all_p_values <- unlist(p_values_list)
+all_p_values <- all_p_values[!is.na(all_p_values)]
+
+# Adjust the p-values using the Benjamini-Yekutieli method
+adjusted_p_values <- p.adjust(all_p_values, method = "BY")
+
+# Rebuild the list with adjusted p-values, keeping the names
+adjusted_p_values_list <- setNames(as.list(adjusted_p_values), names(p_values_list))
+
+# Create a data frame to store the results
+results_df <- data.frame(
+  Outcome_Variable = names(beta_list),
+  COI_Beta = round(unlist(beta_list), 2),
+  COI_Beta_LowerCI = round(sapply(ci_list, `[`, 1), 2),  # Extract and round lower CI
+  COI_Beta_UpperCI = round(sapply(ci_list, `[`, 2), 2),  # Extract and round upper CI
+  P_Value = unlist(p_values_list),
+  Adjusted_P_Value = unlist(adjusted_p_values_list)
+)
+
+# Format p-values
+results_df$P_Value <- ifelse(results_df$P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$P_Value))
+results_df$Adjusted_P_Value <- ifelse(results_df$Adjusted_P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$Adjusted_P_Value))
+
+results_df$COI_Beta_CI <- paste0(
+  results_df$COI_Beta, 
+  " (", 
+  results_df$COI_Beta_LowerCI, 
+  ", ", 
+  results_df$COI_Beta_UpperCI, 
+  ")"
+)
+# Print the formatted results data frame
+print(results_df)
+write.csv(results_df, "D:/OneDrive/文档/ABCD study/COI and brain development/data/output/whole_basic_standarized.csv", row.names = FALSE)
+
+# Optionally, print summaries of each model
+#for (var in whole_brain_var) {
+#  cat("\nModel Summary for:", var, "\n")
+#  print(summary( Basic_whole_brain2[[var]]))
+#}
+```
+
+
+
+
+# The whole brain- fully adjusted model
+
+
+### unstandarzied beta
+```{r}
+Full_whole_brain1 <- list()
+p_values_list <- list()
+beta_list <- list()
+ci_list <- list()
+PEDU_beta_list <- list()
+PEDU_p_list <- list()
+FC_beta_list <- list()
+FC_p_list <- list()
+MH_beta_list <- list()
+MH_p_list <- list()
+
+# Loop over each the whole brain variable and fit a separate LMM
+for (var in whole_brain_var) {
+  # Create the formula for the current model
+  formula <- as.formula(paste(var, "~ COI + interview_age + demo_sex_v2 + ICV_scaled + P_EDU + FC + MH +",
+                              "(1 | site_id_l/rel_family_id)"))
+  
+  # Fit the LMM for the current cognitive variable
+  model <- lmer(formula, data = df_mri)
+  
+  # Store the model in the list
+  Full_whole_brain1[[var]] <- model
+  
+  # Extract the summary of the model
+  model_summary <- summary(model)
+  
+  # Extract the p-values for fixed effects
+  p_values_df <- model_summary$coefficients
+  
+  # Check if COI is in the fixed effects
+  if ("COI" %in% rownames(p_values_df)) {
+    # Extract the beta and p-value for COI
+    beta_list[[var]] <- p_values_df["COI", "Estimate"]
+    p_values_list[[var]] <- p_values_df["COI", "Pr(>|t|)"]
+    
+    # Extract confidence intervals for the model parameters
+    conf_intervals <- confint(model, method = "Wald")  # Wald method is used for fixed effects
+    
+    # Handle cases where confidence intervals might not be properly formed
+    if ("COI" %in% rownames(conf_intervals)) {
+      ci <- conf_intervals["COI", ]
+      if (length(ci) == 2) {  # Ensure there are exactly two elements (lower and upper CI)
+        ci_list[[var]] <- ci
+      } else {
+        ci_list[[var]] <- c(NA, NA)  # Default to NA if confidence interval is not as expected
+      }
+    } else {
+      ci_list[[var]] <- c(NA, NA)  # Default to NA if COI is not in the CI results
+    }
+  } else {
+    # If COI is not found, store NA for betas, p-values, and CIs
+    beta_list[[var]] <- NA
+    p_values_list[[var]] <- NA
+    ci_list[[var]] <- c(NA, NA)
+  }
+# Extract P_EDU, FC, and MH beta and p-values
+  PEDU_beta_list[[var]] <- if ("P_EDU" %in% rownames(model_summary$coefficients)) model_summary$coefficients["P_EDU", "Estimate"] else NA
+  PEDU_p_list[[var]] <- if ("P_EDU" %in% rownames(model_summary$coefficients)) model_summary$coefficients["P_EDU", "Pr(>|t|)"] else NA
+  
+  FC_beta_list[[var]] <- if ("FC" %in% rownames(model_summary$coefficients)) model_summary$coefficients["FC", "Estimate"] else NA
+  FC_p_list[[var]] <- if ("FC" %in% rownames(model_summary$coefficients)) model_summary$coefficients["FC", "Pr(>|t|)"] else NA
+  
+  MH_beta_list[[var]] <- if ("MH" %in% rownames(model_summary$coefficients)) model_summary$coefficients["MH", "Estimate"] else NA
+  MH_p_list[[var]] <- if ("MH" %in% rownames(model_summary$coefficients)) model_summary$coefficients["MH", "Pr(>|t|)"] else NA
+}
+
+# Combine all p-values into a single vector, removing NAs
+all_p_values <- unlist(p_values_list)
+all_p_values <- all_p_values[!is.na(all_p_values)]
+
+# Adjust the p-values using the Benjamini-Yekutieli method
+adjusted_p_values <- p.adjust(all_p_values, method = "BY")
+
+# Rebuild the list with adjusted p-values, keeping the names
+adjusted_p_values_list <- setNames(as.list(adjusted_p_values), names(p_values_list))
+
+# Create a data frame to store the results
+results_df <- data.frame(
+  Outcome_Variable = names(beta_list),
+  COI_Beta = round(unlist(beta_list), 2),
+  COI_Beta_LowerCI = round(sapply(ci_list, `[`, 1), 2),  # Extract and round lower CI
+  COI_Beta_UpperCI = round(sapply(ci_list, `[`, 2), 2),  # Extract and round upper CI
+  P_Value = unlist(p_values_list),
+  Adjusted_P_Value = unlist(adjusted_p_values_list),
+  PEDU_Beta_ust = round(unlist(PEDU_beta_list), 2),
+  PEDU_p_ust = unlist(PEDU_p_list),
+  FC_Beta_ust = round(unlist(FC_beta_list), 2),
+  FC_p_ust = unlist(FC_p_list),
+  MH_Beta_ust = round(unlist(MH_beta_list), 2),
+  MH_p_ust = unlist(MH_p_list)
+)
+
+# Format p-values
+results_df$P_Value <- ifelse(results_df$P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$P_Value))
+results_df$Adjusted_P_Value <- ifelse(results_df$Adjusted_P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$Adjusted_P_Value))
+
+results_df$PEDU_p <- ifelse(results_df$PEDU_p < 0.001, "p < 0.001", sprintf("%.3f", results_df$PEDU_p))
+results_df$FC_p <- ifelse(results_df$FC_p < 0.001, "p < 0.001", sprintf("%.3f", results_df$FC_p))
+results_df$MH_p <- ifelse(results_df$MH_p < 0.001, "p < 0.001", sprintf("%.3f", results_df$MH_p))
+
+
+results_df$COI_Beta_CI <- paste0(
+  results_df$COI_Beta, 
+  " (", 
+  results_df$COI_Beta_LowerCI, 
+  ", ", 
+  results_df$COI_Beta_UpperCI, 
+  ")"
+)
+# Print the formatted results data frame
+print(results_df)
+write.csv(results_df, "D:/OneDrive/文档/ABCD study/COI and brain development/data/output/whole_full_unstandarized.csv", row.names = FALSE)
+
+# Optionally, print summaries of each model
+#for (var in whole_brain_var) {
+#  cat("\nModel Summary for:", var, "\n")
+#  print(summary( Full_whole_brain1[[var]]))
+#}
+
+
+```
+
+
+### standarized beta
+```{r}
+Full_whole_brain2 <- list()
+p_values_list <- list()
+beta_list <- list()
+ci_list <- list()
+PEDU_beta_list <- list()
+PEDU_p_list <- list()
+FC_beta_list <- list()
+FC_p_list <- list()
+MH_beta_list <- list()
+MH_p_list <- list()
+# Loop over each the whole brain variable and fit a separate LMM
+for (var in scaled_whole_brain_var) {
+  # Create the formula for the current model
+  formula <- as.formula(paste(var, "~ COI_scaled + interview_age_scaled + demo_sex_v2 + ICV_scaled + P_EDU_scaled + FC_scaled + MH_scaled  + (1 |site_id_l/rel_family_id)"))
+  
+  # Fit the LMM for the current cognitive variable
+  model <- lmer(formula, data = df_mri)
+  
+  # Store the model in the list
+  Full_whole_brain2[[var]] <- model
+  
+  # Extract the summary of the model
+  model_summary <- summary(model)
+  
+  # Extract the p-values for fixed effects
+  p_values_df <- model_summary$coefficients
+  
+  # Check if COI is in the fixed effects
+  if ("COI_scaled" %in% rownames(p_values_df)) {
+    # Extract the beta and p-value for COI
+    beta_list[[var]] <- p_values_df["COI_scaled", "Estimate"]
+    p_values_list[[var]] <- p_values_df["COI_scaled", "Pr(>|t|)"]
+    
+    # Extract confidence intervals for the model parameters
+    conf_intervals <- confint(model, method = "Wald")  # Wald method is used for fixed effects
+    
+    # Handle cases where confidence intervals might not be properly formed
+    if ("COI_scaled" %in% rownames(conf_intervals)) {
+      ci <- conf_intervals["COI_scaled", ]
+      if (length(ci) == 2) {  # Ensure there are exactly two elements (lower and upper CI)
+        ci_list[[var]] <- ci
+      } else {
+        ci_list[[var]] <- c(NA, NA)  # Default to NA if confidence interval is not as expected
+      }
+    } else {
+      ci_list[[var]] <- c(NA, NA)  # Default to NA if COI is not in the CI results
+    }
+  } else {
+    # If COI is not found, store NA for betas, p-values, and CIs
+    beta_list[[var]] <- NA
+    p_values_list[[var]] <- NA
+    ci_list[[var]] <- c(NA, NA)
+  }
+
+   # Extract P_EDU, FC, and MH beta and p-values
+  PEDU_beta_list[[var]] <- if ("P_EDU_scaled" %in% rownames(model_summary$coefficients)) model_summary$coefficients["P_EDU_scaled", "Estimate"] else NA
+  PEDU_p_list[[var]] <- if ("P_EDU_scaled" %in% rownames(model_summary$coefficients)) model_summary$coefficients["P_EDU_scaled", "Pr(>|t|)"] else NA
+  
+  FC_beta_list[[var]] <- if ("FC_scaled" %in% rownames(model_summary$coefficients)) model_summary$coefficients["FC_scaled", "Estimate"] else NA
+  FC_p_list[[var]] <- if ("FC_scaled" %in% rownames(model_summary$coefficients)) model_summary$coefficients["FC_scaled", "Pr(>|t|)"] else NA
+  
+  MH_beta_list[[var]] <- if ("MH_scaled" %in% rownames(model_summary$coefficients)) model_summary$coefficients["MH_scaled", "Estimate"] else NA
+  MH_p_list[[var]] <- if ("MH_scaled" %in% rownames(model_summary$coefficients)) model_summary$coefficients["MH_scaled", "Pr(>|t|)"] else NA
+}
+
+# Combine all p-values into a single vector, removing NAs
+all_p_values <- unlist(p_values_list)
+all_p_values <- all_p_values[!is.na(all_p_values)]
+
+# Adjust the p-values using the Benjamini-Yekutieli method
+adjusted_p_values <- p.adjust(all_p_values, method = "BY")
+
+# Rebuild the list with adjusted p-values, keeping the names
+adjusted_p_values_list <- setNames(as.list(adjusted_p_values), names(p_values_list))
+
+# Create a data frame to store the results
+results_df <- data.frame(
+  Outcome_Variable = names(beta_list),
+  COI_Beta = round(unlist(beta_list), 2),
+  COI_Beta_LowerCI = round(sapply(ci_list, `[`, 1), 2),  # Extract and round lower CI
+  COI_Beta_UpperCI = round(sapply(ci_list, `[`, 2), 2),  # Extract and round upper CI
+  P_Value = unlist(p_values_list),
+  Adjusted_P_Value = unlist(adjusted_p_values_list),
+  PEDU_Beta = round(unlist(PEDU_beta_list), 2),
+  PEDU_p = unlist(PEDU_p_list),
+  FC_Beta = round(unlist(FC_beta_list), 2),
+  FC_p = unlist(FC_p_list),
+  MH_Beta = round(unlist(MH_beta_list), 2),
+  MH_p = unlist(MH_p_list)
+)
+
+# Format p-values
+results_df$P_Value <- ifelse(results_df$P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$P_Value))
+results_df$Adjusted_P_Value <- ifelse(results_df$Adjusted_P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$Adjusted_P_Value))
+
+results_df$PEDU_p <- ifelse(results_df$PEDU_p < 0.001, "p < 0.001", sprintf("%.3f", results_df$PEDU_p))
+results_df$FC_p <- ifelse(results_df$FC_p < 0.001, "p < 0.001", sprintf("%.3f", results_df$FC_p))
+results_df$MH_p <- ifelse(results_df$MH_p < 0.001, "p < 0.001", sprintf("%.3f", results_df$MH_p))
+
+results_df$COI_Beta_CI <- paste0(
+  results_df$COI_Beta, 
+  " (", 
+  results_df$COI_Beta_LowerCI, 
+  ", ", 
+  results_df$COI_Beta_UpperCI, 
+  ")"
+)
+# Print the formatted results data frame
+print(results_df)
+
+write.csv(results_df, "D:/OneDrive/文档/ABCD study/COI and brain development/data/output/whole_full_standarized.csv", row.names = FALSE)
+
+# Optionally, print summaries of each model
+#for (var in whole_brain_var) {
+#  cat("\nModel Summary for:", var, "\n")
+#  print(summary( Full_ROI_brain1[[var]]))
+#}
+```
+
+
+# ROI-basic adjusted model
+
+### unstandized beta
+
+I used Benjamin-Hochberg FDR corrections as I think the tests of different ROIs are independent. But for the cognition and the whole-brain measures, I still use Benjamini–Yekutieli procedure FDR corrections as I believe those tests are not independent.
+
+```{r}
+ROI_mean_var <- c("Insula_vol_mean","Insula_area_mean","Insula_thick_mean","ACC_vol_mean","ACC_area_mean","ACC_thick_mean","DLPFC_vol_mean","DLPFC_area_mean","DLPFC_thick_mean","IFG_vol_mean","IFG_area_mean","IFG_thick_mean")
+
+
+Basic_ROI_models1 <- list()
+
+p_values_list <- list()
+beta_list <- list()
+ci_list <- list()
+
+# Loop over each the whole brain variable and fit a separate LMM
+for (var in ROI_mean_var) {
+  # Create the formula for the current model
+  formula <- as.formula(paste(var, "~ COI + interview_age + demo_sex_v2 + ICV_scaled +",
+                              "(1 | site_id_l/rel_family_id)"))
+  
+  # Fit the LMM for the current cognitive variable
+  model <- lmer(formula, data = df_mri)
+  
+  # Store the model in the list
+  Basic_ROI_models1[[var]] <- model
+  
+  # Extract the summary of the model
+  model_summary <- summary(model)
+  
+  # Extract the p-values for fixed effects
+  p_values_df <- model_summary$coefficients
+  
+  # Check if COI is in the fixed effects
+  if ("COI" %in% rownames(p_values_df)) {
+    # Extract the beta and p-value for COI
+    beta_list[[var]] <- p_values_df["COI", "Estimate"]
+    p_values_list[[var]] <- p_values_df["COI", "Pr(>|t|)"]
+    
+    # Extract confidence intervals for the model parameters
+    conf_intervals <- confint(model, method = "Wald")  # Wald method is used for fixed effects
+    
+    # Handle cases where confidence intervals might not be properly formed
+    if ("COI" %in% rownames(conf_intervals)) {
+      ci <- conf_intervals["COI", ]
+      if (length(ci) == 2) {  # Ensure there are exactly two elements (lower and upper CI)
+        ci_list[[var]] <- ci
+      } else {
+        ci_list[[var]] <- c(NA, NA)  # Default to NA if confidence interval is not as expected
+      }
+    } else {
+      ci_list[[var]] <- c(NA, NA)  # Default to NA if COI is not in the CI results
+    }
+  } else {
+    # If COI is not found, store NA for betas, p-values, and CIs
+    beta_list[[var]] <- NA
+    p_values_list[[var]] <- NA
+    ci_list[[var]] <- c(NA, NA)
+  }
+}
+
+# Combine all p-values into a single vector, removing NAs
+all_p_values <- unlist(p_values_list)
+all_p_values <- all_p_values[!is.na(all_p_values)]
+
+# Adjust the p-values using the Benjamini-Yekutieli method
+adjusted_p_values <- p.adjust(all_p_values, method = "BH")
+
+# Rebuild the list with adjusted p-values, keeping the names
+adjusted_p_values_list <- setNames(as.list(adjusted_p_values), names(p_values_list))
+
+# Create a data frame to store the results
+results_df <- data.frame(
+  Outcome_Variable = names(beta_list),
+  COI_Beta = round(unlist(beta_list), 2),
+  COI_Beta_LowerCI = round(sapply(ci_list, `[`, 1), 2),  # Extract and round lower CI
+  COI_Beta_UpperCI = round(sapply(ci_list, `[`, 2), 2),  # Extract and round upper CI
+  P_Value = unlist(p_values_list),
+  Adjusted_P_Value = unlist(adjusted_p_values_list)
+)
+
+# Format p-values
+results_df$P_Value <- ifelse(results_df$P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$P_Value))
+results_df$Adjusted_P_Value <- ifelse(results_df$Adjusted_P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$Adjusted_P_Value))
+
+results_df$COI_Beta_CI <- paste0(
+  results_df$COI_Beta, 
+  " (", 
+  results_df$COI_Beta_LowerCI, 
+  ", ", 
+  results_df$COI_Beta_UpperCI, 
+  ")"
+)
+# Print the formatted results data frame
+print(results_df)
+write.csv(results_df, "D:/OneDrive/文档/ABCD study/COI and brain development/data/output/ROI_Basic_unstandarized.csv", row.names = FALSE)
+
+# Optionally, print summaries of each model
+#for (var in ROI_mean_var) {
+#  cat("\nModel Summary for:", var, "\n")
+#  print(summary( Basic_ROI_models1[[var]]))
+#}
+
+
+
+```
+
+### standarized beta
+```{r}
+scaled_ROI_mean_var <- list()
+
+for (var in ROI_mean_var) {
+  # Scale the variable and convert to a numeric vector
+  scaled_var_name <- paste0(var, "_scaled")
+  df_mri[[scaled_var_name]] <- as.numeric(scale(df_mri[[var]]))
+  
+  # Store the name of the scaled variable in the list
+  scaled_ROI_mean_var <- c(scaled_ROI_mean_var, scaled_var_name)
+}
+
+# View the list of scaled variable names
+print(scaled_ROI_mean_var)
+
+Basic_ROI_models2 <- list()
+p_values_list <- list()
+beta_list <- list()
+ci_list <- list()
+
+# Loop over each the whole brain variable and fit a separate LMM
+for (var in scaled_ROI_mean_var) {
+  # Create the formula for the current model
+  formula <- as.formula(paste(var, "~ COI_scaled + interview_age_scaled + demo_sex_v2 + ICV_scaled +",
+                              "(1 | site_id_l/rel_family_id)"))
+  
+  # Fit the LMM for the current cognitive variable
+  model <- lmer(formula, data = df_mri)
+  
+  # Store the model in the list
+  Basic_ROI_models2[[var]] <- model
+  
+  # Extract the summary of the model
+  model_summary <- summary(model)
+  
+  # Extract the p-values for fixed effects
+  p_values_df <- model_summary$coefficients
+  
+  # Check if COI is in the fixed effects
+  if ("COI_scaled" %in% rownames(p_values_df)) {
+    # Extract the beta and p-value for COI
+    beta_list[[var]] <- p_values_df["COI_scaled", "Estimate"]
+    p_values_list[[var]] <- p_values_df["COI_scaled", "Pr(>|t|)"]
+    
+    # Extract confidence intervals for the model parameters
+    conf_intervals <- confint(model, method = "Wald")  # Wald method is used for fixed effects
+    
+    # Handle cases where confidence intervals might not be properly formed
+    if ("COI_scaled" %in% rownames(conf_intervals)) {
+      ci <- conf_intervals["COI_scaled", ]
+      if (length(ci) == 2) {  # Ensure there are exactly two elements (lower and upper CI)
+        ci_list[[var]] <- ci
+      } else {
+        ci_list[[var]] <- c(NA, NA)  # Default to NA if confidence interval is not as expected
+      }
+    } else {
+      ci_list[[var]] <- c(NA, NA)  # Default to NA if COI is not in the CI results
+    }
+  } else {
+    # If COI is not found, store NA for betas, p-values, and CIs
+    beta_list[[var]] <- NA
+    p_values_list[[var]] <- NA
+    ci_list[[var]] <- c(NA, NA)
+  }
+}
+
+# Combine all p-values into a single vector, removing NAs
+all_p_values <- unlist(p_values_list)
+all_p_values <- all_p_values[!is.na(all_p_values)]
+
+# Adjust the p-values using the Benjamini-Yekutieli method
+adjusted_p_values <- p.adjust(all_p_values, method = "BH")
+
+# Rebuild the list with adjusted p-values, keeping the names
+adjusted_p_values_list <- setNames(as.list(adjusted_p_values), names(p_values_list))
+
+# Create a data frame to store the results
+results_df <- data.frame(
+  Outcome_Variable = names(beta_list),
+  COI_Beta = round(unlist(beta_list), 2),
+  COI_Beta_LowerCI = round(sapply(ci_list, `[`, 1), 2),  # Extract and round lower CI
+  COI_Beta_UpperCI = round(sapply(ci_list, `[`, 2), 2),  # Extract and round upper CI
+  P_Value = unlist(p_values_list),
+  Adjusted_P_Value = unlist(adjusted_p_values_list)
+)
+
+# Format p-values
+results_df$P_Value <- ifelse(results_df$P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$P_Value))
+results_df$Adjusted_P_Value <- ifelse(results_df$Adjusted_P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$Adjusted_P_Value))
+
+results_df$COI_Beta_CI <- paste0(
+  results_df$COI_Beta, 
+  " (", 
+  results_df$COI_Beta_LowerCI, 
+  ", ", 
+  results_df$COI_Beta_UpperCI, 
+  ")"
+)
+# Print the formatted results data frame
+print(results_df)
+
+write.csv(results_df, "D:/OneDrive/文档/ABCD study/COI and brain development/data/output/ROI_Basic_standarized.csv", row.names = FALSE)
+
+# Optionally, print summaries of each model
+#for (var in ROI_mean_var) {
+#  cat("\nModel Summary for:", var, "\n")
+#  print(summary( Basic_ROI_models2[[var]]))
+#}
+
+```
+
+
+# ROI- fully adjusted model
+### unstandzied beta
+```{r}
+Full_ROI_models1 <- list()
+p_values_list <- list()
+beta_list <- list()
+ci_list <- list()
+PEDU_beta_list <- list()
+PEDU_p_list <- list()
+FC_beta_list <- list()
+FC_p_list <- list()
+MH_beta_list <- list()
+MH_p_list <- list()
+
+# Loop over each the whole brain variable and fit a separate LMM
+for (var in ROI_mean_var) {
+  # Create the formula for the current model
+  formula <- as.formula(paste(var, "~ COI + interview_age + demo_sex_v2 + ICV_scaled +P_EDU + FC + MH +",
+                              "(1 | site_id_l/rel_family_id)"))
+  
+  # Fit the LMM for the current cognitive variable
+  model <- lmer(formula, data = df_mri)
+  
+  # Store the model in the list
+ Full_ROI_models1[[var]] <- model
+  
+  # Extract the summary of the model
+  model_summary <- summary(model)
+  
+  # Extract the p-values for fixed effects
+  p_values_df <- model_summary$coefficients
+  
+  # Check if COI is in the fixed effects
+  if ("COI" %in% rownames(p_values_df)) {
+    # Extract the beta and p-value for COI
+    beta_list[[var]] <- p_values_df["COI", "Estimate"]
+    p_values_list[[var]] <- p_values_df["COI", "Pr(>|t|)"]
+    
+    # Extract confidence intervals for the model parameters
+    conf_intervals <- confint(model, method = "Wald")  # Wald method is used for fixed effects
+    
+    # Handle cases where confidence intervals might not be properly formed
+    if ("COI" %in% rownames(conf_intervals)) {
+      ci <- conf_intervals["COI", ]
+      if (length(ci) == 2) {  # Ensure there are exactly two elements (lower and upper CI)
+        ci_list[[var]] <- ci
+      } else {
+        ci_list[[var]] <- c(NA, NA)  # Default to NA if confidence interval is not as expected
+      }
+    } else {
+      ci_list[[var]] <- c(NA, NA)  # Default to NA if COI is not in the CI results
+    }
+  } else {
+    # If COI is not found, store NA for betas, p-values, and CIs
+    beta_list[[var]] <- NA
+    p_values_list[[var]] <- NA
+    ci_list[[var]] <- c(NA, NA)
+  }
+# Extract P_EDU, FC, and MH beta and p-values
+  PEDU_beta_list[[var]] <- if ("P_EDU" %in% rownames(model_summary$coefficients)) model_summary$coefficients["P_EDU", "Estimate"] else NA
+  PEDU_p_list[[var]] <- if ("P_EDU" %in% rownames(model_summary$coefficients)) model_summary$coefficients["P_EDU", "Pr(>|t|)"] else NA
+  
+  FC_beta_list[[var]] <- if ("FC" %in% rownames(model_summary$coefficients)) model_summary$coefficients["FC", "Estimate"] else NA
+  FC_p_list[[var]] <- if ("FC" %in% rownames(model_summary$coefficients)) model_summary$coefficients["FC", "Pr(>|t|)"] else NA
+  
+  MH_beta_list[[var]] <- if ("MH" %in% rownames(model_summary$coefficients)) model_summary$coefficients["MH", "Estimate"] else NA
+  MH_p_list[[var]] <- if ("MH" %in% rownames(model_summary$coefficients)) model_summary$coefficients["MH", "Pr(>|t|)"] else NA
+}
+
+# Combine all p-values into a single vector, removing NAs
+all_p_values <- unlist(p_values_list)
+all_p_values <- all_p_values[!is.na(all_p_values)]
+
+# Adjust the p-values using the Benjamini-Yekutieli method
+adjusted_p_values <- p.adjust(all_p_values, method = "BH")
+
+# Rebuild the list with adjusted p-values, keeping the names
+adjusted_p_values_list <- setNames(as.list(adjusted_p_values), names(p_values_list))
+
+# Create a data frame to store the results
+results_df <- data.frame(
+  Outcome_Variable = names(beta_list),
+  COI_Beta = round(unlist(beta_list), 2),
+  COI_Beta_LowerCI = round(sapply(ci_list, `[`, 1), 2),  # Extract and round lower CI
+  COI_Beta_UpperCI = round(sapply(ci_list, `[`, 2), 2),  # Extract and round upper CI
+  P_Value = unlist(p_values_list),
+  Adjusted_P_Value = unlist(adjusted_p_values_list),
+  PEDU_Beta_ust = round(unlist(PEDU_beta_list), 2),
+  PEDU_p_ust = unlist(PEDU_p_list),
+  FC_Beta_ust = round(unlist(FC_beta_list), 2),
+  FC_p_ust = unlist(FC_p_list),
+  MH_Beta_ust = round(unlist(MH_beta_list), 2),
+  MH_p_ust = unlist(MH_p_list)
+)
+
+# Format p-values
+results_df$P_Value <- ifelse(results_df$P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$P_Value))
+results_df$Adjusted_P_Value <- ifelse(results_df$Adjusted_P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$Adjusted_P_Value))
+
+results_df$PEDU_p <- ifelse(results_df$PEDU_p < 0.001, "p < 0.001", sprintf("%.3f", results_df$PEDU_p))
+results_df$FC_p <- ifelse(results_df$FC_p < 0.001, "p < 0.001", sprintf("%.3f", results_df$FC_p))
+results_df$MH_p <- ifelse(results_df$MH_p < 0.001, "p < 0.001", sprintf("%.3f", results_df$MH_p))
+
+
+results_df$COI_Beta_CI <- paste0(
+  results_df$COI_Beta, 
+  " (", 
+  results_df$COI_Beta_LowerCI, 
+  ", ", 
+  results_df$COI_Beta_UpperCI, 
+  ")"
+)
+
+# Print the formatted results data frame
+print(results_df)
+write.csv(results_df, "D:/OneDrive/文档/ABCD study/COI and brain development/data/output/ROI_full_unstandarized.csv", row.names = FALSE)
+
+# Optionally, print summaries of each model
+#for (var in ROI_mean_var) {
+#  cat("\nModel Summary for:", var, "\n")
+#  print(summary( Full_ROI_models1[[var]]))
+#}
+
+
+```
+
+### standarized beta
+```{r}
+Full_ROI_models2 <- list()
+p_values_list <- list()
+beta_list <- list()
+ci_list <- list()
+PEDU_beta_list <- list()
+PEDU_p_list <- list()
+FC_beta_list <- list()
+FC_p_list <- list()
+MH_beta_list <- list()
+MH_p_list <- list()
+
+# Loop over each the whole brain variable and fit a separate LMM
+for (var in scaled_ROI_mean_var) {
+  # Create the formula for the current model
+  formula <- as.formula(paste(var, "~ COI_scaled + interview_age_scaled + demo_sex_v2 + ICV_scaled +P_EDU_scaled + FC_scaled + MH_scaled +",
+                              "(1 | site_id_l/rel_family_id)"))
+  
+  # Fit the LMM for the current cognitive variable
+  model <- lmer(formula, data = df_mri)
+  
+  # Store the model in the list
+ Full_ROI_models2[[var]] <- model
+  
+  # Extract the summary of the model
+  model_summary <- summary(model)
+  
+  # Extract the p-values for fixed effects
+  p_values_df <- model_summary$coefficients
+  
+  # Check if COI is in the fixed effects
+  if ("COI_scaled" %in% rownames(p_values_df)) {
+    # Extract the beta and p-value for COI
+    beta_list[[var]] <- p_values_df["COI_scaled", "Estimate"]
+    p_values_list[[var]] <- p_values_df["COI_scaled", "Pr(>|t|)"]
+    
+    # Extract confidence intervals for the model parameters
+    conf_intervals <- confint(model, method = "Wald")  # Wald method is used for fixed effects
+    
+    # Handle cases where confidence intervals might not be properly formed
+    if ("COI_scaled" %in% rownames(conf_intervals)) {
+      ci <- conf_intervals["COI_scaled", ]
+      if (length(ci) == 2) {  # Ensure there are exactly two elements (lower and upper CI)
+        ci_list[[var]] <- ci
+      } else {
+        ci_list[[var]] <- c(NA, NA)  # Default to NA if confidence interval is not as expected
+      }
+    } else {
+      ci_list[[var]] <- c(NA, NA)  # Default to NA if COI is not in the CI results
+    }
+  } else {
+    # If COI is not found, store NA for betas, p-values, and CIs
+    beta_list[[var]] <- NA
+    p_values_list[[var]] <- NA
+    ci_list[[var]] <- c(NA, NA)
+  }
+
+  # Extract P_EDU, FC, and MH beta and p-values
+  PEDU_beta_list[[var]] <- if ("P_EDU_scaled" %in% rownames(model_summary$coefficients)) model_summary$coefficients["P_EDU_scaled", "Estimate"] else NA
+  PEDU_p_list[[var]] <- if ("P_EDU_scaled" %in% rownames(model_summary$coefficients)) model_summary$coefficients["P_EDU_scaled", "Pr(>|t|)"] else NA
+  
+  FC_beta_list[[var]] <- if ("FC_scaled" %in% rownames(model_summary$coefficients)) model_summary$coefficients["FC_scaled", "Estimate"] else NA
+  FC_p_list[[var]] <- if ("FC_scaled" %in% rownames(model_summary$coefficients)) model_summary$coefficients["FC_scaled", "Pr(>|t|)"] else NA
+  
+  MH_beta_list[[var]] <- if ("MH_scaled" %in% rownames(model_summary$coefficients)) model_summary$coefficients["MH_scaled", "Estimate"] else NA
+  MH_p_list[[var]] <- if ("MH_scaled" %in% rownames(model_summary$coefficients)) model_summary$coefficients["MH_scaled", "Pr(>|t|)"] else NA
+}
+
+# Combine all p-values into a single vector, removing NAs
+all_p_values <- unlist(p_values_list)
+all_p_values <- all_p_values[!is.na(all_p_values)]
+
+# Adjust the p-values using the Benjamini-Yekutieli method
+adjusted_p_values <- p.adjust(all_p_values, method = "BH")
+
+# Rebuild the list with adjusted p-values, keeping the names
+adjusted_p_values_list <- setNames(as.list(adjusted_p_values), names(p_values_list))
+
+# Create a data frame to store the results
+results_df <- data.frame(
+  Outcome_Variable = names(beta_list),
+  COI_Beta = round(unlist(beta_list), 2),
+  COI_Beta_LowerCI = round(sapply(ci_list, `[`, 1), 2),  # Extract and round lower CI
+  COI_Beta_UpperCI = round(sapply(ci_list, `[`, 2), 2),  # Extract and round upper CI
+  P_Value = unlist(p_values_list),
+  Adjusted_P_Value = unlist(adjusted_p_values_list),
+  PEDU_Beta = round(unlist(PEDU_beta_list), 2),
+  PEDU_p = unlist(PEDU_p_list),
+  FC_Beta = round(unlist(FC_beta_list), 2),
+  FC_p = unlist(FC_p_list),
+  MH_Beta = round(unlist(MH_beta_list), 2),
+  MH_p = unlist(MH_p_list)
+)
+
+# Format p-values
+results_df$P_Value <- ifelse(results_df$P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$P_Value))
+results_df$Adjusted_P_Value <- ifelse(results_df$Adjusted_P_Value < 0.001, "p < 0.001", sprintf("%.3f", results_df$Adjusted_P_Value))
+
+results_df$PEDU_p <- ifelse(results_df$PEDU_p < 0.001, "p < 0.001", sprintf("%.3f", results_df$PEDU_p))
+results_df$FC_p <- ifelse(results_df$FC_p < 0.001, "p < 0.001", sprintf("%.3f", results_df$FC_p))
+results_df$MH_p <- ifelse(results_df$MH_p < 0.001, "p < 0.001", sprintf("%.3f", results_df$MH_p))
+
+
+results_df$COI_Beta_CI <- paste0(
+  results_df$COI_Beta, 
+  " (", 
+  results_df$COI_Beta_LowerCI, 
+  ", ", 
+  results_df$COI_Beta_UpperCI, 
+  ")"
+)
+
+# Print the formatted results data frame
+print(results_df)
+
+# Save the results_df data frame to the specified CSV file
+write.csv(results_df, "D:/OneDrive/文档/ABCD study/COI and brain development/data/output/ROI_full_standarized.csv", row.names = FALSE)
+
+
+
+# Optionally, print summaries of each model
+#for (var in ROI_mean_var) {
+#  cat("\nModel Summary for:", var, "\n")
+#  print(summary( Full_ROI_models2[[var]]))
+#}
+
+```
+
+
+
+
+# Sensitivity analysis
+## part1. recode race/ethicity as subgroups
+To check the generability, we examined the associations again in different subgroups
+```{r}
+df_neurocog <- df_neurocog %>%
+  mutate(race_recode = case_when(
+    race_ethnicity == 1 ~ "White",
+    race_ethnicity == 2 ~ "Black",
+    race_ethnicity == 3 ~ "Latinx",
+    race_ethnicity %in% c(4, 5, NA) ~ "Others",
+    TRUE ~ NA_character_  # This handles any values not explicitly coded
+  ))
+
+df_mri <- df_mri %>%
+  mutate(race_recode = case_when(
+    race_ethnicity == 1 ~ "White",
+    race_ethnicity == 2 ~ "Black",
+    race_ethnicity == 3 ~ "Latinx",
+    race_ethnicity %in% c(4, 5, NA) ~ "Others",
+    TRUE ~ NA_character_  # This handles any values not explicitly coded
+  ))
+
+
+
+```
+
+# Save the data
+```{r}
+write.csv(df_neurocog,"D:/OneDrive/文档/ABCD study/COI and brain development/data/output/df_neurocog_t1.csv")
+
+write.csv(df_mri,"D:/OneDrive/文档/ABCD study/COI and brain development/data/output/df_mri_t1.csv")
+```
+
+
+
+#-----------------PLOT-----------------------
+# Figure 1--forest--------
+
+## load data
+```{r}
+library(openxlsx)
+df_cog_plot <- read_excel("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/figures/data_plot_cog.xlsx")
+
+library(tidyr)
+df_cog_plot <- df_cog_plot %>%
+  separate("standarized Beta", into = c("Standarized_Beta", "CIs"), sep = " \\(", remove = FALSE) %>%
+  separate(CIs, into = c("LowCIs", "UpperCIs"), sep = ", ") %>%
+  mutate(UpperCIs = gsub("\\)", "", UpperCIs),  # Remove closing parenthesis from UpperCI
+         Standarized_Beta = as.numeric(Standarized_Beta), 
+         LowCIs = as.numeric(LowCIs),
+         UpperCIs = as.numeric(UpperCIs))
+
+
+df_cog_plot$Significance <- cut(df_cog_plot$Adjusted_P_Value,
+                                breaks = c(-Inf, 0.001, 0.01, 0.05, 1),
+                                labels = c("***", "**", "*", "ns"))
+
+
+desired_order <- c("Verbal Ability", "Attention Control", "Working Memory", 
+                   "Cognitive Flexibility", "Processing Speed", "Episodic Memory", 
+                   "Reading Ability", "Fluid Cognition", "Crystallized Cognition", 
+                   "Composite Cognition")
+
+df_cog_plot$Measure <- factor(df_cog_plot$Measure, levels = rev(desired_order))
+
+```
+
+
+## plot for cog
+```{r}
+library(scales)
+# Create the forest plot
+cog_plot1 <- ggplot(df_cog_plot, aes(x = Standarized_Beta, y = Measure, xmin = LowCIs, xmax = UpperCIs)) +
+  geom_point(aes(color = Model), size = 1) +  # Plot point estimates
+  geom_errorbarh(aes(color = Model), height = 0.2, size = 0.5) +  # Plot error bars
+   geom_text(aes(label = sprintf("%.2f %s", Standarized_Beta, Significance)), 
+            vjust = -0.6,  # Adjust vertical position to place text above dots
+            hjust = 0.5,   # Adjust horizontal position
+            size = 3) +
+  facet_wrap(~Model, nrow = 1, ncol = 2, scales = "free_x") +  # Facet by the 'Model' variable
+  labs(
+       x = "COI Standarized Estimate (with 95% CI)", 
+       y = " ") +
+ theme_minimal() +  # Start with minimal theme
+  theme(
+    panel.background = element_rect(fill = "gray90", color = NA),  # Gray background
+    panel.grid.major = element_line(color = "white", size = 0.5),  # White major grid lines
+    panel.grid.minor = element_line(color = "white", size = 0.25), # White minor grid lines
+    strip.background = element_rect(fill = "gray70", color = NA),  # Gray background for facet labels
+    strip.text = element_text(size = 8, color = "black",face = "bold"),
+    axis.text.y = element_text(size = 8,  color = "black",hjust = 1),
+    axis.title = element_text(size = 8)
+  )+ # Ensure consistent x-axis limits
+ coord_cartesian(xlim = c(0.00, 0.50))+
+   scale_x_continuous(breaks = seq(0.00, 0.50, by = 0.10), 
+                     labels = number_format(accuracy = 0.01)) +
+  scale_color_manual(values = c("Basic Model" = "#f21b3f", "Full Model" = "#08bdbd"),
+                     labels = c("Basic Model" = "Basic Model: adjusted demographics only", 
+                                "Full Model" = "Full Model: adjusted demographics + household-level factors")) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "#756E6E")
+
+print(cog_plot1)
+
+ggsave("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/figures/cog_plot1.png", plot = cog_plot1, width = 10, height = 6, dpi = 500)
+```
+
+# method2
+
+```{r}
+df_cog_plot$Model <- factor(df_cog_plot$Model, levels = c("Basic Model", "Full Model"))
+
+# Create the forest plot
+cog_plot2 <- ggplot(df_cog_plot, aes(x = Standarized_Beta, y = Measure, xmin = LowCIs, xmax = UpperCIs)) +
+  geom_point(aes(color = Model), size = 1) +  # Plot point estimates
+  geom_errorbarh(aes(color = Model), height = 0.2, size = 0.5) +  # Plot error bars
+  geom_text(aes(label = sprintf("%.2f %s", Standarized_Beta, Significance)), 
+            vjust = -1,  # Adjust vertical position to place text above dots
+            hjust = 0.5,   # Adjust horizontal position
+            size = 3,    # Text size
+            color = "black") +
+  labs(
+    x = "COI Standarized Estimate (with 95% CI)", 
+    y = " ",
+    color = "Model Type") +
+  theme_minimal() +  # Start with minimal theme
+  theme(
+    panel.background = element_rect(fill = "gray90", color = NA),  # Gray background
+    panel.grid.major = element_line(color = "white", size = 0.5),  # White major grid lines
+    panel.grid.minor = element_line(color = "white", size = 0.25), # White minor grid lines
+    strip.background = element_rect(fill = "gray70", color = NA),  # Gray background for facet labels
+    strip.text = element_text(size = 8, face = "bold", color = "black"),
+    axis.text.y = element_text(size = 8, color = "black"),
+    axis.title = element_text(size = 8)
+  ) +
+  scale_color_manual(values = c("Basic Model" = "#f21b3f", "Full Model" = "#08bdbd"),
+                     labels = c("Basic Model" = "Basic Model: adjusted demographics only", 
+                                "Full Model" = "Full Model: adjusted demographics + household-level factors")) +  # Custom legend labels
+  coord_cartesian(xlim = c(min(df_cog_plot$LowCIs, na.rm = TRUE), 
+                            max(df_cog_plot$UpperCIs, na.rm = TRUE))) +  # Ensure consistent x-axis limits
+  theme(
+    legend.position = "bottom",  # Move legend to bottom if desired
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 10)
+  )+
+   coord_cartesian(xlim = c(-0.05, 0.4))
+
+# Print the plot
+print(cog_plot2)
+
+ggsave("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/figures/cog_plot2.png", plot = cog_plot2, width = 10, height = 6, dpi = 500)
+```
+
+## plot for whole-brain
+## load data
+```{r}
+df_who_plot <- read_excel("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/figures/data_plot_who.xlsx")
+
+df_who_plot <- df_who_plot %>%
+  separate(standarized_Beta, into = c("Standarized_Beta", "CIs"), sep = " \\(", remove = FALSE) %>%
+  separate(CIs, into = c("LowCIs", "UpperCIs"), sep = ", ") %>%
+  mutate(UpperCIs = gsub("\\)", "", UpperCIs),  # Remove closing parenthesis from UpperCI
+         Standarized_Beta = as.numeric(Standarized_Beta), 
+         LowCIs = as.numeric(LowCIs),
+         UpperCIs = as.numeric(UpperCIs))
+
+df_who_plot <- df_who_plot %>%
+  separate(unstandarized_Beta, into = c("Unstandarized_Beta", "CI"), sep = " \\(", remove = FALSE) %>%
+  separate(CI, into = c("LowCI", "UpperCI"), sep = ", ") %>%
+  mutate(UpperCI = gsub("\\)", "", UpperCI),  # Remove closing parenthesis from UpperCI
+         Unstandarized_Beta = as.numeric(Unstandarized_Beta), 
+         LowCI = as.numeric(LowCI),
+         UpperCI = as.numeric(UpperCI))
+
+df_who_plot$Significance <- cut(df_who_plot$Adjusted_P_Value,
+                                breaks = c(-Inf, 0.001, 0.01, 0.05, 1),
+                                labels = c("***", "**", "*", "ns"))
+
+desired_order <- c("Cortical Gray Matter Volume","Total Cortical Surface Area","Mean Cortical Thickness")
+
+df_who_plot$Measure <- factor(df_who_plot$Measure, levels = rev(desired_order))
+
+```
+
+### approach1
+```{r}
+library(scales)
+# Create the forest plot
+who_plot1 <- ggplot(df_who_plot, aes(x = Standarized_Beta, y = Measure, xmin = LowCIs, xmax = UpperCIs)) +
+  geom_point(aes(color = Model), size = 1) +  # Plot point estimates
+  geom_errorbarh(aes(color = Model), height = 0.2, size = 0.5) +  # Plot error bars
+   geom_text(aes(label = sprintf("%.2f %s", Standarized_Beta, Significance)), 
+            vjust = -0.6,  # Adjust vertical position to place text above dots
+            hjust = 0.5,   # Adjust horizontal position
+            size = 3    # Text size
+           ) +
+  facet_wrap(~Model, nrow = 1, ncol = 2, scales = "free_x") +  # Facet by the 'Model' variable
+  labs(
+       x = "COI Standarized Estimate (with 95% CI)", 
+       y = " ") +
+ theme_minimal() +  # Start with minimal theme
+  theme(
+    panel.background = element_rect(fill = "gray90", color = NA),  # Gray background
+    panel.grid.major = element_line(color = "white", size = 0.5),  # White major grid lines
+    panel.grid.minor = element_line(color = "white", size = 0.25), # White minor grid lines
+    strip.background = element_rect(fill = "gray70", color = NA),  # Gray background for facet labels
+    strip.text = element_text(size = 8,  color = "black",face = "bold"),
+    axis.text.y = element_text(size = 8,  color = "black",hjust = 1),
+    axis.title = element_text(size = 8)
+  )+ # Ensure consistent x-axis limits
+ coord_cartesian(xlim = c(0, 0.15)) +  # x-axis limits
+  scale_x_continuous(breaks = seq(0, 0.15, by = 0.03), 
+                     labels = number_format(accuracy = 0.01)) +
+  scale_color_manual(values = c("Basic Model" = "#f21b3f", "Full Model" = "#08bdbd"),
+                     labels = c("Basic Model" = "Basic Model: adjusted demographics only", 
+                                "Full Model" = "Full Model: adjusted demographics + household-level factors")) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "#756E6E")
+
+print(who_plot1)
+
+ggsave("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/figures/who_plot1.png", plot = who_plot1, width = 10, height = 3, dpi = 500)
+```
+
+##method 2
+```{r}
+df_who_plot$Model <- factor(df_who_plot$Model, levels = c("Basic Model", "Full Model"))
+
+# Create the forest plot
+who_plot2 <- ggplot(df_who_plot, aes(x = Standarized_Beta, y = Measure, xmin = LowCIs, xmax = UpperCIs)) +
+  geom_point(aes(color = Model), size = 3) +  # Plot point estimates
+  geom_errorbarh(aes(color = Model), height = 0.2, size = 1.2) +  # Plot error bars
+  geom_text(aes(label = sprintf("%.2f %s", Standarized_Beta, Significance)), 
+            vjust = -0.5,  # Adjust vertical position to place text above dots
+            hjust = 0.5,   # Adjust horizontal position
+            size = 3,    # Text size
+            color = "black") +
+  labs(
+    x = "Standarized Estimate (with 95% CI)", 
+    y = " ",
+    color = "Model Type") +
+  theme_minimal() +  # Start with minimal theme
+  theme(
+    panel.background = element_rect(fill = "gray90", color = NA),  # Gray background
+    panel.grid.major = element_line(color = "white", size = 0.5),  # White major grid lines
+    panel.grid.minor = element_line(color = "white", size = 0.25), # White minor grid lines
+    strip.background = element_rect(fill = "gray70", color = NA),  # Gray background for facet labels
+    strip.text = element_text(size = 10,  color = "black"),
+    axis.text.y = element_text(size = 10, color = "black"),
+    axis.title = element_text(size = 10)
+  ) +
+  scale_color_manual(values = c("Basic Model" = "#f21b3f", "Full Model" = "#08bdbd"),
+                     labels = c("Basic Model" = "Basic Model: adjusted demographics only", 
+                                "Full Model" = "Full Model: adjusted demographics + household-level factors")) +  # Custom legend labels
+  coord_cartesian(xlim = c(min(df_cog_plot$LowCIs, na.rm = TRUE), 
+                            max(df_cog_plot$UpperCIs, na.rm = TRUE))) +  # Ensure consistent x-axis limits
+  theme(
+    legend.position = "bottom",  # Move legend to bottom if desired
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 10)
+  )+
+  coord_cartesian(xlim = c(-0.05, 0.15))
+
+
+# Print the plot
+print(who_plot2)
+
+ggsave("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/figures/who_plot2.png", plot =who_plot2, width = 10, height = 6, dpi = 500)
+```
+
+## Plot for ROI
+### load data
+
+```{r}
+df_roi_plot <- read_excel("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/figures/data_plot_roi.xlsx")
+
+df_roi_plot <- df_roi_plot %>%
+  separate("standarized Beta", into = c("Standarized_Beta", "CIs"), sep = " \\(", remove = FALSE) %>%
+  separate(CIs, into = c("LowCIs", "UpperCIs"), sep = ", ") %>%
+  mutate(UpperCIs = gsub("\\)", "", UpperCIs),  # Remove closing parenthesis from UpperCI
+         Standarized_Beta = as.numeric(Standarized_Beta), 
+         LowCIs = as.numeric(LowCIs),
+         UpperCIs = as.numeric(UpperCIs))
+
+df_roi_plot$Significance <- cut(df_roi_plot$Adjusted_P_Value,
+                                breaks = c(-Inf, 0.001, 0.01, 0.05, 1),
+
+                                                                labels = c("***", "**", "*", "ns"))
+desired_order <- c("DLPFC Volume", "DLPFC Surface Area", "DLPFC Thickness",
+  "ACC Volume", "ACC Surface Area", "ACC Thickness",
+  "IFG Volume", "IFG Surface Area", "IFG Thickness",
+  "Insula Volume", "Insula Surface Area", "Insula Thickness")
+
+df_roi_plot$Measure <- factor(df_roi_plot$Measure, levels = rev(desired_order))
+
+```
+
+## Approach 1
+```{r}
+# Create the forest plot
+roi_plot1 <- ggplot(df_roi_plot, aes(x = Standarized_Beta, y = Measure, xmin = LowCIs, xmax = UpperCIs)) +
+  geom_point(aes(color = Model), size = 1) +  # Plot point estimates
+  geom_errorbarh(aes(color = Model), height = 0.2, size = 0.5) +  # Plot error bars
+   geom_text(aes(label = sprintf("%.2f %s", Standarized_Beta, Significance)), 
+            vjust = -0.6,  # Adjust vertical position to place text above dots
+            hjust = 0.5,   # Adjust horizontal position
+            size = 3) +
+  facet_wrap(~Model, nrow = 1, ncol = 2, scales = "free_x") +  # Facet by the 'Model' variable
+  labs(
+       x = "COI Standarized Estimate (with 95% CI)", 
+       y = " ") +
+ theme_minimal() +  # Start with minimal theme
+  theme(
+    panel.background = element_rect(fill = "gray90", color = NA),  # Gray background
+    panel.grid.major = element_line(color = "white", size = 0.5),  # White major grid lines
+    panel.grid.minor = element_line(color = "white", size = 0.25), # White minor grid lines
+    strip.background = element_rect(fill = "gray70", color = NA),  # Gray background for facet labels
+    strip.text = element_text(size = 8, color = "black",face = "bold"),
+    axis.text.y = element_text(size = 8,  color = "black",hjust = 1),
+    axis.title = element_text(size = 8)
+  )+ # Ensure consistent x-axis limits
+  coord_cartesian(xlim = c(-0.05, 0.085))+
+  scale_color_manual(values = c("Basic Model" = "#f21b3f", "Full Model" = "#08bdbd"),
+                     labels = c("Basic Model" = "Basic Model: adjusted demographics only", 
+                                "Full Model" = "Full Model: adjusted demographics + household-level factors")) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "#756E6E")
+
+print(roi_plot1)
+
+ggsave("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/figures/roi_plot1.png", plot = roi_plot1, width = 10, height = 3, dpi = 500)
+```
+
+##Approch 2
+```{r}
+df_roi_plot$Model <- factor(df_roi_plot$Model, levels = c("Basic Model", "Full Model"))
+
+# Create the forest plot
+roi_plot2 <- ggplot(df_roi_plot, aes(x = Standarized_Beta, y = Measure, xmin = LowCIs, xmax = UpperCIs)) +
+  geom_point(aes(color = Model), size = 3) +  # Plot point estimates
+  geom_errorbarh(aes(color = Model), height = 0.2, size = 1.2) +  # Plot error bars
+  geom_text(aes(label = sprintf("%.2f %s", Standarized_Beta, Significance)), 
+            vjust = -0.5,  # Adjust vertical position to place text above dots
+            hjust = 0.5,   # Adjust horizontal position
+            size = 3,    # Text size
+            color = "black") +
+  labs(
+    x = "Standarized Estimate (with 95% CI)", 
+    y = " ",
+    color = "Model Type") +
+  theme_minimal() +  # Start with minimal theme
+  theme(
+    panel.background = element_rect(fill = "gray90", color = NA),  # Gray background
+    panel.grid.major = element_line(color = "white", size = 0.5),  # White major grid lines
+    panel.grid.minor = element_line(color = "white", size = 0.25), # White minor grid lines
+    strip.background = element_rect(fill = "gray70", color = NA),  # Gray background for facet labels
+    strip.text = element_text(size = 10, face = "bold", color = "black"),
+    axis.text.y = element_text(size = 10, color = "black"),
+    axis.title = element_text(size = 10)
+  ) +
+  scale_color_manual(values = c("Basic Model" = "#f21b3f", "Full Model" = "#08bdbd"),
+                     labels = c("Basic Model" = "Basic Model: adjusted demographics only", 
+                                "Full Model" = "Full Model: adjusted demographics + household-level factors")) +  # Custom legend labels
+  coord_cartesian(xlim = c(min(df_cog_plot$LowCIs, na.rm = TRUE), 
+                            max(df_cog_plot$UpperCIs, na.rm = TRUE))) +  # Ensure consistent x-axis limits
+  theme(
+    legend.position = "top",  # Move legend to bottom if desired
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 10)
+  )+
+  coord_cartesian(xlim = c(-0.05, 0.1))
+
+
+# Print the plot
+print(roi_plot2)
+
+ggsave("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/figures/roi_plot2.png", plot =roi_plot2, width = 10, height = 6, dpi = 500)
+```
+
+### merge all the plots
+
+## load the brain atlas
+```{r}
+library(ggseg)
+# Your data
+someData <- tibble(
+  region = rep(c("rostral anterior cingulate","caudal anterior cingulate",
+                 "superior frontal","caudal middle frontal", "rostral middle frontal",
+                 "insula", "pars opercularis","pars triangularis","pars orbitalis"), 2), 
+  p = sample(seq(0,.5,.001), 18))
+
+# Create a new column for the custom labels
+someData <- someData %>%
+  mutate(new_region = case_when(
+     region == "insula" ~ "Insula",
+      region %in% c("pars opercularis", "pars triangularis", "pars orbitalis") ~ "IFG",
+     region %in% c("superior frontal", "caudal middle frontal", "rostral middle frontal") ~ "DLPFC",
+    region %in% c("rostral anterior cingulate", "caudal anterior cingulate") ~ "ACC"
+  ))
+
+# Define the custom color palette for the new regions
+custom_colors <- c(
+  "Insula" = "#ff9e00",
+  "IFG" = "#bc4749",
+  "DLPFC" = "#43aa8b",
+  "ACC" = "#c8b6ff"
+  )
+desired_order <- c("DLPFC","ACC", "IFG","Insula")
+
+someData$new_region <- factor(someData$new_region, levels = desired_order)
+
+
+
+# Create the plot
+my_plot <- someData %>%
+  ggseg(atlas = dk, 
+        mapping = aes(fill = new_region),
+        show.legend = TRUE,  # Show the legend
+        color = "black",
+        position = "stacked") +
+  
+  # Assign custom colors to new region labels
+  scale_fill_manual(values = custom_colors) +  
+  
+  # Optional: Clean minimal theme
+  theme_minimal() +  
+  
+  # Customize theme to remove grid lines, axis titles, text, and ticks
+  theme(
+    panel.grid = element_blank(),         # Remove grid lines       # Remove axis ticks
+    panel.border = element_blank()         # Optionally remove panel border
+  ) +
+  
+  # Set x-axis text to "Medial"
+  scale_x_continuous(
+    breaks = c(195,550),  # c(135,500)  # Define the breaks if you have specific tick marks
+    labels = c("Lateral","Medial") # Set the label for the x-axis
+  ) +
+  scale_y_continuous(
+    breaks = c(190,450),  # c(90,350)  # Define the breaks if you have specific tick marks
+    labels = c("L","R") # Set the label for the x-axis
+  ) +
+  
+  # Legend title
+   labs(x = "Side", y= "Hemisphere", fill = "ROIs: ")+
+  theme(legend.position = "right", 
+        axis.text.y = element_text(size = 8,  color = "black"),
+    axis.title = element_text(size = 8),
+    legend.text = element_text(size = 8),      # Adjust legend label font size
+    legend.title = element_text(size = 8)     # Adjust legend title font size
+    )
+
+
+
+
+
+# Save the plot as a PNG file
+ggsave("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/figures/my_brain_plot.png", plot = my_plot, width = 8, height = 6, dpi = 500)
+
+# Alternatively, save as a PDF
+#ggsave("my_brain_plot.pdf", plot = my_plot, width = 8, height = 6)
+
+# Display the plot
+print(my_plot)
+```
+
+### combine plots
+
+```{r}
+
+library(ggpubr)
+
+my_plot <- my_plot + theme(legend.position = "right")
+
+ABC_plot_sen <- ggarrange(cog_plot1, who_plot1, roi_plot1, 
+          ncol = 1,  # Arrange them in two columns
+          nrow = 3,  # This will ensure the plots are stacked appropriately
+          heights = c(3.2, 1.5, 3.6),  # Same height for each row
+          common.legend = TRUE,  # Use common legend for all plots
+          legend = "top",  labels = c("A", "B", "C"),
+          font.label = list(size = 8, face = "bold", color = "black")) 
+
+my_plot1 <- ggarrange(my_plot,
+                          ncol = 1, 
+                          nrow = 1, 
+                          common.legend = TRUE,  # Shared legend
+                          legend = "right",        # Legend position at top
+                          labels = c("D"),
+                           font.label = list(size = 8, face = "bold", color = "black"))
+
+combined_plot_sen <- ggarrange(ABC_plot_sen, my_plot1,
+          ncol = 1,  # Arrange them in two columns
+          nrow = 2,  # This will ensure the plots are stacked appropriately
+          heights = c(9, 2),  # Same height for each row
+          common.legend = FALSE,  # Use common legend for all plots
+          font.label = list(size = 8, face = "bold", color = "black")) 
+
+ggsave(filename = "D:/OneDrive/combined_plot_figure1.tiff", 
+       plot = combined_plot_sen, 
+       width = 190,  # Width of the output figure
+       height = 290,  # Height of the output figure
+       units = "mm", # Units of measurement (inches)
+       dpi = 500,
+        device = "tiff")   # Resolution (dots per inch)
+
+
+
+print(combined_plot_sen)
+
+```
+
+
+```{r}
+
+library(ggpubr)
+
+# For plot A (cog_plot1) - legend at the top
+cog_plot1 <- cog_plot1 + theme(legend.position = "top")
+
+# For plot B (roi_plot1) - keep legend hidden (to share a common legend later)
+roi_plot1 <- roi_plot1 + theme(legend.position = "none")
+
+# For plot C (who_plot1) - keep legend hidden (to share a common legend later)
+who_plot1 <- who_plot1 + theme(legend.position = "none")
+
+# For plot D (my_plot) - legend on the right
+my_plot <- my_plot + theme(legend.position = "right")
+
+# Combine plots A, B, C with a common legend
+ac_combined <- ggarrange(cog_plot1, roi_plot1, 
+                          ncol = 2, 
+                          nrow = 1, 
+                          common.legend = TRUE,  # Shared legend
+                          legend = "top",        # Legend position at top
+                          labels = c("A", "C"),
+                           heights = c(1, 1))
+
+bd_combined <- ggarrange(who_plot1, my_plot,
+                          ncol = 2, 
+                          nrow = 1, 
+                          common.legend = FALSE,  # Shared legend
+                          labels = c("B", "D"),
+                           heights = c(1, 1))
+# Combine with plot D (which has its own legend on the right)
+combined_plot <- ggarrange(ac_combined, bd_combined, 
+                           ncol = 1,  # Arrange vertically
+                           nrow = 2,
+                           heights = c(2, 0.8),
+                           font.label = list(size = 8, face = "bold", color = "black"))    # Adjust height proportions
+
+# Print the combined plot
+print(combined_plot)
+
+ggsave(filename = "D:/OneDrive/combined_plot1.tiff", 
+       plot = combined_plot, 
+       width = 7.48,  # Adjusted width
+       height = 10,    # Adjusted height
+       units = "in", 
+       dpi = 500,
+       device = "tiff")
+
+print(combined_plot)
+
+```
+
+
+
+# Aim 2: RWA variables selection
+## pls go to https://rwa-web.shinyapps.io/multipleregression/
+```{r}
+df_neurocog <- read.csv("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/df_neurocog_t1.csv")
+df_mri <-  read.csv("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/df_mri_t1.csv")
+
+neurocog_vars <- c(
+  "nihtbx_picvocab_uncorrected",
+  "nihtbx_flanker_uncorrected",
+  "nihtbx_list_uncorrected",
+  "nihtbx_cardsort_uncorrected",
+  "nihtbx_pattern_uncorrected",
+  "nihtbx_picture_uncorrected",
+  "nihtbx_reading_uncorrected",
+  "nihtbx_fluidcomp_uncorrected",
+  "nihtbx_cryst_uncorrected",
+  "nihtbx_totalcomp_uncorrected"
+)
+
+covars_cog <- c("interview_age","demo_sex_v2","FC","P_EDU","MH","ADI")
+
+whole_brain_var <- c("smri_thick_cdk_mean","smri_vol_cdk_total","smri_area_cdk_total")
+
+ROI_mean_var <- c("Insula_vol_mean","Insula_area_mean","Insula_thick_mean","ACC_vol_mean","ACC_area_mean","ACC_thick_mean","DLPFC_vol_mean","DLPFC_area_mean","DLPFC_thick_mean","IFG_vol_mean","IFG_area_mean","IFG_thick_mean")
+
+Other_vars <- c("src_subject_id","site_id_l","rel_family_id","COI.ED", "COI.HE", "COI.SE","smri_vol_scs_intracranialv")
+
+
+
+# Combine all variable lists into one
+cog_vars_aim2 <- c(Other_vars,covars_cog, neurocog_vars)
+mri_vars_aim2 <- c(Other_vars,covars_cog, whole_brain_var, ROI_mean_var)
+
+# Extract the specified columns from df
+df_aim2_cog <- df_neurocog[, cog_vars_aim2]
+df_aim2_mri <- df_mri[,mri_vars_aim2]
+
+complete_rows <- !apply(df_aim2_cog["ADI"], 1, anyNA)
+df_aim2_cog <- df_aim2_cog[complete_rows, ]
+
+complete_rows2 <- !apply(df_aim2_mri["ADI"], 1, anyNA)
+df_aim2_mri <- df_aim2_mri[complete_rows2, ]
+
+write.csv(df_aim2_cog,"D:/OneDrive/文档/ABCD study/COI and brain development/data/output/df_aim2_cog.csv")
+
+write.csv(df_aim2_mri,"D:/OneDrive/文档/ABCD study/COI and brain development/data/output/df_aim2_mri.csv")
+
+```
+
+
+# check the distribution
+```{r}
+df_aim2_mri <- read.csv("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/df_aim2_mri.csv")
+
+df_aim2_mri$ACC_thick_mean
+boxplot(df_aim2_mri$ACC_thick_mean)
+
+boxplot(df_aim2_mri$DLPFC_thick_mean)
+
+```
+
+
+
+
+
+
+# Aim 3: longitudinal analysis: SEM in Mplus
+### data prepare: wide format data
+
+```{r}
+# variable prepare for T1, T2
+
+df_mri_t1 <- read.csv("D:/OneDrive/文档/ABCD study/COI and brain development/data/output/df_mri_t1.csv")
+
+df_t2 <- read.csv("D:/OneDrive/文档/ABCD study/COI and brain development/data/input/df_t2.csv")
+
+```
+
+# T2 compute ROIs
+```{r}
+
+df_t2$ICV <- df_t2$smri_vol_scs_intracranialv # ICV will be covarites
+
+# Insula
+df_t2$Insula_vol_mean <- (df_t2$smri_vol_cdk_insulalh + df_t2$smri_vol_cdk_insularh)/2
+df_t2$Insula_area_mean <- (df_t2$smri_area_cdk_insulalh + df_t2$smri_area_cdk_insularh)/2
+df_t2$Insula_thick_mean <- (df_t2$smri_thick_cdk_insulalh + df_t2$smri_thick_cdk_insularh)/2
+
+# ACC
+df_t2$ACC_vol_lh <- df_t2$smri_vol_cdk_rracatelh + df_t2$smri_vol_cdk_cdacatelh
+df_t2$ACC_vol_rh <- df_t2$smri_vol_cdk_rracaterh + df_t2$smri_vol_cdk_cdacaterh
+df_t2$ACC_vol_mean <- (df_t2$ACC_vol_lh + df_t2$ACC_vol_rh)/2
+
+df_t2$ACC_area_lh <- df_t2$smri_area_cdk_rracatelh + df_t2$smri_area_cdk_cdacatelh
+df_t2$ACC_area_rh <- df_t2$smri_area_cdk_rracaterh + df_t2$smri_area_cdk_cdacaterh
+df_t2$ACC_area_mean <- (df_t2$ACC_area_lh + df_t2$ACC_area_rh)/2
+
+df_t2$ACC_thick_lh <- df_t2$smri_thick_cdk_rracatelh + df_t2$smri_thick_cdk_cdacatelh
+df_t2$ACC_thick_rh <- df_t2$smri_thick_cdk_rracaterh + df_t2$smri_thick_cdk_cdacaterh
+df_t2$ACC_thick_mean <- (df_t2$ACC_thick_lh + df_t2$ACC_thick_rh)/2
+
+# DLPFC
+df_t2$DLPFC_vol_lh <- df_t2$smri_vol_cdk_sufrlh + df_t2$smri_vol_cdk_cdmdfrlh + df_t2$smri_vol_cdk_rrmdfrlh
+df_t2$DLPFC_vol_rh <- df_t2$smri_vol_cdk_sufrrh + df_t2$smri_vol_cdk_cdmdfrrh + df_t2$smri_vol_cdk_rrmdfrrh
+df_t2$DLPFC_vol_mean <- (df_t2$DLPFC_vol_lh + df_t2$DLPFC_vol_rh)/2
+
+df_t2$DLPFC_area_lh <- df_t2$smri_area_cdk_sufrlh + df_t2$smri_area_cdk_cdmdfrlh + df_t2$smri_area_cdk_rrmdfrlh
+df_t2$DLPFC_area_rh <- df_t2$smri_area_cdk_sufrrh + df_t2$smri_area_cdk_cdmdfrrh + df_t2$smri_area_cdk_rrmdfrrh
+df_t2$DLPFC_area_mean <- (df_t2$DLPFC_area_lh + df_t2$DLPFC_area_rh)/2
+
+df_t2$DLPFC_thick_lh <- df_t2$smri_thick_cdk_sufrlh + df_t2$smri_thick_cdk_cdmdfrlh + df_t2$smri_thick_cdk_rrmdfrlh
+df_t2$DLPFC_thick_rh <- df_t2$smri_thick_cdk_sufrrh + df_t2$smri_thick_cdk_cdmdfrrh + df_t2$smri_thick_cdk_rrmdfrrh
+df_t2$DLPFC_thick_mean <- (df_t2$DLPFC_thick_lh + df_t2$DLPFC_thick_rh)/2
+  
+# IFG
+df_t2$IFG_vol_lh <- df_t2$smri_vol_cdk_parsopclh + df_t2$smri_vol_cdk_parsobislh + df_t2$smri_vol_cdk_parstgrislh
+df_t2$IFG_vol_rh <- df_t2$smri_vol_cdk_parsopcrh + df_t2$smri_vol_cdk_parsobisrh + df_t2$smri_vol_cdk_parstgrisrh
+df_t2$IFG_vol_mean <- (df_t2$IFG_vol_lh + df_t2$IFG_vol_rh)/2
+
+df_t2$IFG_area_lh <- df_t2$smri_area_cdk_parsopclh + df_t2$smri_area_cdk_parsobislh + df_t2$smri_area_cdk_parstgrislh
+df_t2$IFG_area_rh <- df_t2$smri_area_cdk_parsopcrh + df_t2$smri_area_cdk_parsobisrh + df_t2$smri_area_cdk_parstgrisrh
+df_t2$IFG_area_mean <- (df_t2$IFG_area_lh + df_t2$IFG_area_rh)/2
+
+df_t2$IFG_thick_lh <- df_t2$smri_thick_cdk_parsopclh + df_t2$smri_thick_cdk_parsobislh + df_t2$smri_thick_cdk_parstgrislh
+df_t2$IFG_thick_rh <- df_t2$smri_thick_cdk_parsopcrh + df_t2$smri_thick_cdk_parsobisrh + df_t2$smri_thick_cdk_parstgrisrh
+df_t2$IFG_thick_mean <- (df_t2$IFG_thick_lh + df_t2$IFG_thick_rh)/2
+
+
+```
+
+
+# MPLUS data
+```{r}
+Other_var <- c("src_subject_id","site_id_l","rel_family_id","COI","smri_vol_scs_intracranialv","interview_age","demo_sex_v2","P_EDU","FC","MH","mri_info_manufacturer","race_recode")
+
+neurocog_vars_t2 <- c(
+  "nihtbx_picvocab_uncorrected",
+  "nihtbx_flanker_uncorrected",
+  "nihtbx_pattern_uncorrected",
+  "nihtbx_picture_uncorrected",
+  "nihtbx_reading_uncorrected"
+)
+
+# compute the ROI at T2
+
+sMRI_var <- c("smri_vol_cdk_total","smri_thick_cdk_mean","smri_area_cdk_total")
+ROI_mean_var <- c("Insula_vol_mean","Insula_area_mean","Insula_thick_mean","ACC_vol_mean","ACC_area_mean","ACC_thick_mean","DLPFC_vol_mean","DLPFC_area_mean","DLPFC_thick_mean","IFG_vol_mean","IFG_area_mean","IFG_thick_mean")
+
+Other_var_t2 <- c("src_subject_id","visit_type","imgincl_t1w_include","smri_vol_scs_intracranialv","interview_age")
+
+vars_t1 <- c(Other_var,sMRI_var,ROI_mean_var)
+vars_t2 <-c(Other_var_t2,sMRI_var,ROI_mean_var,neurocog_vars_t2)
+
+
+```
+
+```{r}
+
+# Subset and rename variables from df_t1
+df_t1_selected <- df_mri_t1 %>%
+  select(all_of(vars_t1)) %>%
+  rename_with(~ paste0(.x, "_t1")) %>%
+  rename(src_subject_id = src_subject_id_t1)  # Keep the original name for the join
+
+
+df_t2_selected <- df_t2 %>%
+  select(all_of(vars_t2)) %>%
+  rename_with(~ paste0(.x, "_t2")) %>%
+  rename(src_subject_id = src_subject_id_t2)  # Keep the original name for the join
+
+
+
+df_mplus <- df_t1_selected %>%
+  inner_join(df_t2_selected, by = "src_subject_id") # the data means all available both T1 and T2
+
+df_mplus <- df_mplus[complete.cases(df_mplus), ]
+df_mplus <- subset(df_mplus,imgincl_t1w_include_t2==1)
+
+df_mplus <- df_mplus %>%
+  mutate(
+    GE = ifelse(mri_info_manufacturer_t1 == "GE MEDICAL SYSTEMS", 1, 0),
+    PH = ifelse(mri_info_manufacturer_t1 == "Philips Medical Systems", 1, 0),
+    SE = ifelse(mri_info_manufacturer_t1 == "SIEMENS", 1, 0)
+  )
+
+df_mplus <- df_mplus %>%
+  mutate(scanner = case_when(
+    mri_info_manufacturer_t1 == "GE MEDICAL SYSTEMS" ~ 1,
+    mri_info_manufacturer_t1 == "Philips Medical Systems" ~ 2,
+    mri_info_manufacturer_t1 == "SIEMENS" ~ 3,
+    TRUE ~ NA_real_  # Assign NA if none of the conditions are met
+  ))
+
+
+# Remove "site" and keep only the numbers
+df_mplus$site_id_l_t1 <- sub("site", "", df_mplus$site_id_l_t1)
+
+
+# Rename the columns
+df_mplus <- df_mplus %>%
+  rename(
+    picvo = nihtbx_picvocab_uncorrected_t2,
+    flanker = nihtbx_flanker_uncorrected_t2,
+    pattern = nihtbx_pattern_uncorrected_t2,
+    picture = nihtbx_picture_uncorrected_t2,
+    reading = nihtbx_reading_uncorrected_t2,
+    ICV_t1 = smri_vol_scs_intracranialv_t1,
+    ICV_t2 = smri_vol_scs_intracranialv_t2,
+    vol_t1 = smri_vol_cdk_total_t1,
+    vol_t2 = smri_vol_cdk_total_t2,
+    thick_t1 = smri_thick_cdk_mean_t1,
+    thick_t2 = smri_thick_cdk_mean_t2,
+    area_t1 = smri_area_cdk_total_t1,
+    area_t2 = smri_area_cdk_total_t2,
+    age_t1 = interview_age_t1,
+    age_t2 = interview_age_t2,
+    sex_t1 = demo_sex_v2_t1
+  )
+
+# Shorten the column names to no more than 8 characters
+df_mplus <- df_mplus %>%
+  rename(
+    Ins_vol1 = Insula_vol_mean_t1,
+    Ins_area1 = Insula_area_mean_t1,
+    Ins_thk1 = Insula_thick_mean_t1,
+    ACC_vol1 = ACC_vol_mean_t1,
+    ACC_area1 = ACC_area_mean_t1,
+    ACC_thk1 = ACC_thick_mean_t1,
+    DLP_vol1 = DLPFC_vol_mean_t1,
+    DLP_area1 = DLPFC_area_mean_t1,
+    DLP_thk1 = DLPFC_thick_mean_t1,
+    IFG_vol1 = IFG_vol_mean_t1,
+    IFG_area1 = IFG_area_mean_t1,
+    IFG_thk1 = IFG_thick_mean_t1,
+    Ins_vol2 = Insula_vol_mean_t2,
+    Ins_area2 = Insula_area_mean_t2,
+    Ins_thk2 = Insula_thick_mean_t2,
+    ACC_vol2 = ACC_vol_mean_t2,
+    ACC_area2 = ACC_area_mean_t2,
+    ACC_thk2 = ACC_thick_mean_t2,
+    DLP_vol2 = DLPFC_vol_mean_t2,
+    DLP_area2 = DLPFC_area_mean_t2,
+    DLP_thk2 = DLPFC_thick_mean_t2,
+    IFG_vol2 = IFG_vol_mean_t2,
+    IFG_area2 = IFG_area_mean_t2,
+    IFG_thk2 = IFG_thick_mean_t2
+  )
+
+
+
+
+
+```
+
+
+
+## extract the files for each SEM model
+```{r}
+
+# extract the files for each SEM model
+
+SEM_vol <- df_mplus %>%
+  select(src_subject_id,site_id_l_t1, rel_family_id_t1, COI_t1, ICV_t1, age_t1, age_t2,
+        sex_t1, P_EDU_t1, FC_t1, MH_t1, visit_type_t2,
+         picvo, flanker, pattern, picture, reading, GE, PH, scanner,
+         vol_t1, vol_t2,race_recode_t1)
+
+
+SEM_thick <- df_mplus %>%
+  select(src_subject_id, site_id_l_t1, rel_family_id_t1, COI_t1, ICV_t1, ICV_t2, age_t1, age_t2,
+        sex_t1, P_EDU_t1, FC_t1, MH_t1, visit_type_t2,
+         picvo, flanker, pattern, picture, reading, GE, PH, scanner,
+         thick_t1, thick_t2,race_recode_t1)
+
+SEM_area  <- df_mplus %>%
+  select(src_subject_id, site_id_l_t1, rel_family_id_t1, COI_t1, ICV_t1, ICV_t2, age_t1, age_t2,
+        sex_t1, P_EDU_t1, FC_t1, MH_t1, visit_type_t2,
+         picvo, flanker, pattern, picture, reading, GE, PH, scanner,
+         area_t1, area_t2,race_recode_t1)
+
+ROI_vol <- df_mplus %>%
+  select(src_subject_id, site_id_l_t1, rel_family_id_t1, COI_t1, ICV_t1, ICV_t2, age_t1, age_t2,
+        sex_t1, P_EDU_t1, FC_t1, MH_t1, visit_type_t2,
+         picvo, flanker, pattern, picture, reading, GE, PH, scanner,
+         Ins_vol1,  # Insula volume at t1
+         ACC_vol1,  # ACC volume at t1
+         DLP_vol1,  # DLPFC volume at t1
+         IFG_vol1,  # IFG volume at t1
+         Ins_vol2,  # Insula volume at t2
+         ACC_vol2,  # ACC volume at t2
+         DLP_vol2,  # DLPFC volume at t2
+         IFG_vol2,
+        race_recode_t1# IFG volume at t2
+  )
+
+
+ROI_area <- df_mplus %>%
+  select(src_subject_id, site_id_l_t1, rel_family_id_t1, COI_t1, ICV_t1, ICV_t2, age_t1, age_t2,
+        sex_t1, P_EDU_t1, FC_t1, MH_t1, visit_type_t2,
+         picvo, flanker, pattern, picture, reading, GE, PH, scanner,
+        Ins_area1,  # Insula area at t1
+         ACC_area1,  # ACC area at t1
+         DLP_area1,  # DLPFC area at t1
+         IFG_area1,  # IFG area at t1
+         Ins_area2,  # Insula area at t2
+         ACC_area2,  # ACC area at t2
+         DLP_area2,  # DLPFC area at t2
+         IFG_area2,
+        race_recode_t1# IFG area at t2
+  )
+
+
+ROI_thick <- df_mplus %>%
+  select(src_subject_id, site_id_l_t1, rel_family_id_t1, COI_t1, ICV_t1, ICV_t2, age_t1, age_t2,
+        sex_t1, P_EDU_t1, FC_t1, MH_t1, visit_type_t2,
+         picvo, flanker, pattern, picture, reading, GE, PH, scanner,
+         Ins_thk1,  # Insula thickness at t1
+         ACC_thk1,  # ACC thickness at t1
+         DLP_thk1,  # DLPFC thickness at t1
+         IFG_thk1,  # IFG thickness at t1
+         Ins_thk2,  # Insula thickness at t2
+         ACC_thk2,  # ACC thickness at t2
+         DLP_thk2,  # DLPFC thickness at t2
+         IFG_thk2, # IFG thickness at t2
+        race_recode_t1
+  )
+
+```
+
+
+
+## save the data
+```{r}
+write.csv(df_mplus,"D:/OneDrive/文档/ABCD study/COI and brain development/data/output/df_mplus.csv")
+
+write.csv(SEM_vol,"D:/OneDrive/mplus/input/SEM_vol.csv")
+write.csv(SEM_thick,"D:/OneDrive/mplus/input/SEM_thick.csv")
+write.csv(SEM_area,"D:/OneDrive/mplus/input/SEM_area.csv")
+write.csv(ROI_area,"D:/OneDrive/mplus/input/SEM_area.csv")
+write.csv(ROI_vol,"D:/OneDrive/mplus/input/ROI_vol.csv")
+write.csv(ROI_thick,"D:/OneDrive/mplus/input/ROI_thick.csv")
+
+```
+
