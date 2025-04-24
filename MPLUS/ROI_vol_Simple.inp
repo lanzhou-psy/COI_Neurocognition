@@ -1,0 +1,253 @@
+TITLE: SEM to examine indirect effects of brain structure on COI and cognitive function;
+DATA: FILE IS "D:/OneDrive/mplus/input/ROI_vol.csv";
+
+! this file is SEM for ROI volume
+
+VARIABLE: 
+    NAMES ARE src_subject_id site_id_l_t1 rel_family_id_t1 COI_t1 ICV_t1 ICV_t2 
+    age_t1 age_t2 sex_t1 P_EDU_t1 FC_t1 MH_t1 visit_type_t2 
+    picvo flanker pattern picture reading GE PH scanner 
+    Ins_vol1 ACC_vol1 DLP_vol1 IFG_vol1 Ins_vol2 ACC_vol2 DLP_vol2 IFG_vol2;
+
+    USEVARIABLES ARE COI_t1 picvo flanker pattern picture reading ICV_t1 ICV_t2 
+    age_t1 sex_t1 visit_type_t2 P_EDU_t1 FC_t1 MH_t1
+    Ins_vol1 ACC_vol1 DLP_vol1 IFG_vol1 Ins_vol2 ACC_vol2 DLP_vol2 IFG_vol2;
+
+                 
+
+MISSING ARE ALL (-999);  ! Specify your missing data code
+
+CLUSTER = rel_family_id_t1;
+STRATIFICATION = site_id_l_t1;
+
+DEFINE:
+    ! Rescale brain structure variables if variances are too large
+    Ins_vol1 = Ins_vol1 / 10000;  
+    ACC_vol1 = ACC_vol1 / 10000; 
+    DLP_vol1 = DLP_vol1 / 10000;
+    IFG_vol1 = IFG_vol1 / 10000;
+
+    Ins_vol2 = Ins_vol2 / 10000;  
+    ACC_vol2 = ACC_vol2 / 10000; 
+    DLP_vol2 = DLP_vol2 / 10000;
+    IFG_vol2 = IFG_vol2 / 10000;    
+       
+    
+   ICV_t1 = ICV_t1 / 1000000; ! Rescale the ICV
+   ICV_t2 = ICV_t2 / 1000000;
+
+    picvo = picvo/100;
+    flanker = flanker/100;
+    pattern = pattern/100;
+   picture = picture/100;
+    reading = reading/100;
+    COI_t1 = COI_t1/100;
+    age_t1 = age_t1/100;
+    P_EDU_t1 = P_EDU_t1/10;
+    FC_t1 = FC_t1 / 2;
+
+ANALYSIS:
+    TYPE = COMPLEX;
+    ESTIMATOR = ML;  ! Use ML or MLR (robust to non-normality)
+ !   BOOTSTRAP = 10000;  ! Bootstrapping for confidence intervals
+
+MODEL:
+  ! Latent factors
+  GA BY picvo reading;
+  EF BY picture flanker pattern;
+  
+  GA WITH EF;
+
+  ! Direct effects (SEM model)
+  ! COI_t1 and all family covariates
+
+
+  COI_t1 ON P_EDU_t1;
+  COI_t1 ON MH_t1;
+  COI_t1 ON FC_t1;
+
+
+!T1 brain volume on COI
+  Ins_vol1 ON COI_t1;  ! Brain  at time 1 predicted by COI
+  ACC_vol1 ON COI_t1;  ! Brain at time 2 predicted by COI
+  DLP_vol1 ON COI_t1;
+  IFG_vol1 ON COI_t1;
+  
+!T2 brain volume on COI
+  !Ins_vol2 ON COI_t1;  ! Brain  at time 1 predicted by COI
+  !ACC_vol2 ON COI_t1;  ! Brain at time 2 predicted by COI
+  !DLP_vol2 ON COI_t1;
+  !IFG_vol2 ON COI_t1;
+
+!T2 brain volume on T1 brain volume 
+  Ins_vol2 ON Ins_vol1;  ! Brain  at time 1 predicted by COI
+  ACC_vol2 ON ACC_vol1;  ! Brain at time 2 predicted by COI
+  DLP_vol2 ON DLP_vol1;
+  IFG_vol2 ON IFG_vol1;
+  
+!Connition t2 predicted by ROI t1 and t2  
+
+ ! GA ON Ins_vol1;  
+ ! GA ON ACC_vol1; 
+ ! GA ON DLP_vol1;
+ ! GA ON IFG_vol1;
+
+ ! EF ON Ins_vol1;  
+ ! EF ON ACC_vol1; 
+ ! EF ON DLP_vol1;
+ ! EF ON IFG_vol1;
+
+  GA ON Ins_vol2;  
+  GA ON ACC_vol2; 
+  GA ON DLP_vol2;
+  GA ON IFG_vol2;
+
+  EF ON Ins_vol2;  
+  EF ON ACC_vol2; 
+  EF ON DLP_vol2;
+  EF ON IFG_vol2;
+  
+
+!Direct effect of COI on Cognition
+  GA ON COI_t1;  ! Direct effect of COI on GA
+  EF ON COI_t1;  ! Direct effect of COI on EF
+
+!Correlation between T1 volumes
+ Ins_vol1 with ACC_vol1; 
+ Ins_vol1 with DLP_vol1;
+ Ins_vol1 with IFG_vol1;
+ ACC_vol1 with DLP_vol1;
+ ACC_vol1 with IFG_vol1;
+ DLP_vol1 with IFG_vol1;
+
+!Correlation between T2 volumes
+ Ins_vol2 with ACC_vol2; 
+ Ins_vol2 with DLP_vol2;
+ Ins_vol2 with IFG_vol2;
+ ACC_vol2 with DLP_vol2;
+ ACC_vol2 with IFG_vol2;
+ DLP_vol2 with IFG_vol2;
+
+ 
+!!Below are covariates 
+
+! COI_t1 and all family covariates
+  COI_t1 ON P_EDU_t1;
+  COI_t1 ON MH_t1;
+  COI_t1 ON FC_t1;
+
+! ROI t1 and t2 predicted by sex at time 1
+
+  Ins_vol1 ON sex_t1;
+  ACC_vol1 ON sex_t1; 
+  DLP_vol1 ON sex_t1;
+  IFG_vol1 ON sex_t1;
+
+  Ins_vol2 ON sex_t1; 
+  ACC_vol2 ON sex_t1;  
+  DLP_vol2 ON sex_t1;
+  IFG_vol2 ON sex_t1;
+
+
+! ROI t1 and t2 predicted by age at time 1
+
+  Ins_vol1 ON age_t1;
+  ACC_vol1 ON age_t1; 
+  DLP_vol1 ON age_t1;
+  IFG_vol1 ON age_t1;
+
+  Ins_vol2 ON age_t1; 
+  ACC_vol2 ON age_t1;  
+  DLP_vol2 ON age_t1;
+  IFG_vol2 ON age_t1;
+
+
+! ROI t1  predicted by ICV at time 1
+
+  Ins_vol1 ON ICV_t1;
+  ACC_vol1 ON ICV_t1; 
+  DLP_vol1 ON ICV_t1;
+  IFG_vol1 ON ICV_t1;
+
+  Ins_vol2 ON ICV_t2; 
+  ACC_vol2 ON ICV_t2;  
+  DLP_vol2 ON ICV_t2;
+  IFG_vol2 ON ICV_t2;
+
+  !ICV_t2 ON ICV_t1;
+! ROI t1  predicted by parental education at time 1
+
+  Ins_vol1 ON P_EDU_t1;
+  ACC_vol1 ON P_EDU_t1; 
+  DLP_vol1 ON P_EDU_t1;
+  IFG_vol1 ON P_EDU_t1;
+
+! ROI t2 predicted by parental education at time 1
+  Ins_vol2 ON P_EDU_t1; 
+  ACC_vol2 ON P_EDU_t1;  
+  DLP_vol2 ON P_EDU_t1;
+  IFG_vol2 ON P_EDU_t1;
+
+! ROI t1  predicted by family conflict at time 1
+
+  Ins_vol1 ON FC_t1;
+  ACC_vol1 ON FC_t1; 
+  DLP_vol1 ON FC_t1;
+  IFG_vol1 ON FC_t1;
+
+! ROI t2 predicted by family conflict at time 1
+  Ins_vol2 ON FC_t1; 
+  ACC_vol2 ON FC_t1;  
+  DLP_vol2 ON FC_t1;
+  IFG_vol2 ON FC_t1;
+
+! ROI t1  predicted by family material harship at time 1
+
+  Ins_vol1 ON MH_t1;
+  ACC_vol1 ON MH_t1; 
+  DLP_vol1 ON MH_t1;
+  IFG_vol1 ON MH_t1;
+
+! ROI t2 predicted by family material harship at time 1
+  Ins_vol2 ON MH_t1; 
+  ACC_vol2 ON MH_t1;  
+  DLP_vol2 ON MH_t1;
+  IFG_vol2 ON MH_t1;
+
+
+
+  
+  GA ON sex_t1;  ! GA predicted by sex at time 1
+  EF ON sex_t1;  ! EF predicted by sex at time 1
+
+  GA ON age_t1;  ! GA predicted by age at time 1
+  EF ON age_t1;  ! EF predicted by age at time 1
+
+  GA ON P_EDU_t1;  ! GA predicted by parental eductaion at time 1
+  EF ON P_EDU_t1;  ! EF predicted by parental eductaion at time 1
+
+  GA ON FC_t1;  ! GA predicted by FC at time 1
+  EF ON FC_t1;  ! EF predicted by FC at time 1
+
+  GA ON MH_t1;  ! GA predicted by MH at time 1
+  EF ON MH_t1;  ! EF predicted by MH at time 1
+
+  GA ON visit_type_t2;  ! GA predicted by vist type (in person or hybrid) at time 2
+  EF ON visit_type_t2;  ! EF predicted byvist type (in person or hybrid)  at time 2
+
+
+  P_EDU_t1 WITH MH_t1;
+  ICV_t2  on ICV_t1;
+
+MODEL INDIRECT:
+  ! Indirect effects
+  GA IND COI_t1;  ! Indirect effect of COI on GA through brain structure 
+  EF IND COI_t1;  ! Indirect effect of COI on EF through brain structure
+
+OUTPUT: 
+  CINTERVAL (BOOTSTRAP);  ! Confidence intervals for indirect effects via bootstrapping
+  STDYX;   ! Standardized estimates
+  TECH1;   ! Parameter specifications
+  TECH4;   ! Latent variable covariances
+  !MODINDICES (ALL);  ! Modification indices for model respecification if needed
+  RESIDUAL;  ! Residuals for model diagnostics

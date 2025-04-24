@@ -1,0 +1,559 @@
+VERSION 1.1.0
+INPUT
+TITLE:
+ SEM to examine indirect effects of brain structure on COI and cognitive function;
+DATA:
+ FILE IS "D:/OneDrive/mplus/input/ROI_area.csv";
+VARIABLE:
+    NAMES ARE src_subject_id site_id_l_t1 rel_family_id_t1 COI_t1 ICV_t1 ICV_t2
+    age_t1 age_t2 sex_t1 P_EDU_t1 FC_t1 MH_t1 visit_type_t2
+    picvo flanker pattern picture reading GE PH scanner
+    Ins_area1 ACC_area1 DLP_area1 IFG_area1 Ins_area2
+    ACC_area2 DLP_area2 IFG_area2;
+    USEVARIABLES ARE COI_t1 picvo flanker pattern picture reading
+    ICV_t1 ICV_t2
+    age_t1
+    sex_t1 visit_type_t2 P_EDU_t1 FC_t1 MH_t1
+    Ins_area1 ACC_area1 DLP_area1 IFG_area1 Ins_area2
+    ACC_area2 DLP_area2 IFG_area2;
+MISSING ARE ALL (-999);
+CLUSTER = rel_family_id_t1;
+STRATIFICATION = site_id_l_t1;
+DEFINE:
+    Ins_area1 = Ins_area1 / 1000;
+    ACC_area1 = ACC_area1 / 1000;
+    DLP_area1 = DLP_area1 / 1000;
+    IFG_area1 = IFG_area1 / 1000;
+    Ins_area2 = Ins_area2 / 1000;
+    ACC_area2 = ACC_area2 / 1000;
+    DLP_area2 = DLP_area2 / 1000;
+    IFG_area2 = IFG_area2 / 1000;
+   ICV_t1 = ICV_t1 / 1000000;
+   ICV_t2 = ICV_t2 / 1000000;
+    picvo = picvo/100;
+    flanker = flanker/100;
+    pattern = pattern/100;
+    picture = picture/100;
+    reading = reading/100;
+    COI_t1 = COI_t1/100;
+    age_t1 = age_t1/100;
+    P_EDU_t1 = P_EDU_t1/10;
+ANALYSIS:
+    TYPE = COMPLEX;
+    ESTIMATOR = ML;
+OUTPUT:
+  CINTERVAL (BOOTSTRAP);
+  STDYX;
+  TECH1;
+  TECH4;
+  RESIDUAL;
+MODEL:
+  GA BY picvo reading;
+  EF BY picture flanker pattern;
+  GA WITH EF;
+  Ins_area1 ON COI_t1;
+  ACC_area1 ON COI_t1;
+  DLP_area1 ON COI_t1;
+  IFG_area1 ON COI_t1;
+  Ins_area2 ON Ins_area1;
+  ACC_area2 ON ACC_area1;
+  DLP_area2 ON DLP_area1;
+  IFG_area2 ON IFG_area1;
+  GA ON Ins_area2;
+  GA ON ACC_area2;
+  GA ON DLP_area2;
+  GA ON IFG_area2;
+  EF ON Ins_area2;
+  EF ON ACC_area2;
+  EF ON DLP_area2;
+  EF ON IFG_area2;
+  GA ON COI_t1;
+  EF ON COI_t1;
+ Ins_area1 WITH ACC_area1;
+ Ins_area1 WITH DLP_area1;
+ Ins_area1 WITH IFG_area1;
+ ACC_area1 WITH DLP_area1;
+ ACC_area1 WITH IFG_area1;
+ DLP_area1 WITH IFG_area1;
+ Ins_area2 WITH ACC_area2;
+ Ins_area2 WITH DLP_area2;
+ Ins_area2 WITH IFG_area2;
+ ACC_area2 WITH DLP_area2;
+ ACC_area2 WITH IFG_area2;
+ DLP_area2 WITH IFG_area2;
+  COI_t1 ON P_EDU_t1;
+  COI_t1 ON MH_t1;
+  COI_t1 ON FC_t1;
+  Ins_area1 ON sex_t1;
+  ACC_area1 ON sex_t1;
+  DLP_area1 ON sex_t1;
+  IFG_area1 ON sex_t1;
+  Ins_area2 ON sex_t1;
+  ACC_area2 ON sex_t1;
+  DLP_area2 ON sex_t1;
+  IFG_area2 ON sex_t1;
+  Ins_area1 ON age_t1;
+  ACC_area1 ON age_t1;
+  DLP_area1 ON age_t1;
+  IFG_area1 ON age_t1;
+  Ins_area2 ON age_t1;
+  ACC_area2 ON age_t1;
+  DLP_area2 ON age_t1;
+  IFG_area2 ON age_t1;
+  Ins_area1 ON ICV_t1;
+  ACC_area1 ON ICV_t1;
+  DLP_area1 ON ICV_t1;
+  IFG_area1 ON ICV_t1;
+  Ins_area2 ON ICV_t2;
+  ACC_area2 ON ICV_t2;
+  DLP_area2 ON ICV_t2;
+  IFG_area2 ON ICV_t2;
+  Ins_area1 ON P_EDU_t1;
+  ACC_area1 ON P_EDU_t1;
+  DLP_area1 ON P_EDU_t1;
+  IFG_area1 ON P_EDU_t1;
+  Ins_area2 ON P_EDU_t1;
+  ACC_area2 ON P_EDU_t1;
+  DLP_area2 ON P_EDU_t1;
+  IFG_area2 ON P_EDU_t1;
+  Ins_area1 ON FC_t1;
+  ACC_area1 ON FC_t1;
+  DLP_area1 ON FC_t1;
+  IFG_area1 ON FC_t1;
+  Ins_area2 ON FC_t1;
+  ACC_area2 ON FC_t1;
+  DLP_area2 ON FC_t1;
+  IFG_area2 ON FC_t1;
+  Ins_area1 ON MH_t1;
+  ACC_area1 ON MH_t1;
+  DLP_area1 ON MH_t1;
+  IFG_area1 ON MH_t1;
+  Ins_area2 ON MH_t1;
+  ACC_area2 ON MH_t1;
+  DLP_area2 ON MH_t1;
+  IFG_area2 ON MH_t1;
+  GA ON sex_t1;
+  EF ON sex_t1;
+  GA ON age_t1;
+  EF ON age_t1;
+  GA ON P_EDU_t1;
+  EF ON P_EDU_t1;
+  GA ON FC_t1;
+  EF ON FC_t1;
+  GA ON MH_t1;
+  EF ON MH_t1;
+  GA ON visit_type_t2;
+  EF ON visit_type_t2;
+  P_EDU_t1 WITH MH_t1;
+  ICV_t2  on ICV_t1;
+INPUT_END
+2
+2
+0
+2
+MLR
+1
+GENERAL
+0
+17
+2
+5
+coi_t1 picvo flanker pattern picture reading icv_t2 ins_area1 acc_area1 dlp_area1 ifg_area1 ins_area2 acc_area2 dlp_area2 ifg_area2 p_edu_t1 mh_t1 ga ef icv_t1 age_t1 sex_t1 visit_type_t2 fc_t1
+5
+1 -1 -1 -1 -1 -1 1 2 2 2 2 3 3 3 3 0 0 4 4 0 0 0 0 0
+0
+2
+ga
+picvo reading
+ef
+picture flanker pattern
+1 1 ga picvo 1.000 0.000
+1 1 ga reading 0.623 0.016
+1 1 ef picture 1.000 0.000
+1 1 ef flanker 0.958 0.058
+1 1 ef pattern 1.906 0.118
+1 1 ins_area2 ga 0.005 0.005
+1 1 acc_area2 ga 0.020 0.005
+1 1 dlp_area2 ga 0.003 0.0007716725231
+1 1 ifg_area2 ga 0.008 0.002
+1 1 coi_t1 ga 0.048 0.004
+1 1 sex_t1 ga 0.008 0.002
+1 1 age_t1 ga 0.193 0.012
+1 1 p_edu_t1 ga 0.099 0.004
+1 1 fc_t1 ga -0.002 0.0004582646070
+1 1 mh_t1 ga -0.004 0.0008559695561
+1 1 visit_type_t2 ga 0.003 0.002
+1 1 ins_area2 ef 0.009 0.005
+1 1 acc_area2 ef 0.010 0.005
+1 1 dlp_area2 ef -.0001281802106 0.0006541052717
+1 1 ifg_area2 ef -.0007061205688 0.002
+1 1 coi_t1 ef 0.030 0.004
+1 1 sex_t1 ef 0.010 0.002
+1 1 age_t1 ef 0.140 0.013
+1 1 p_edu_t1 ef 0.031 0.004
+1 1 fc_t1 ef -0.001 0.0004197127710
+1 1 mh_t1 ef -0.003 0.0008580722497
+1 1 visit_type_t2 ef 0.007 0.001
+1 1 coi_t1 ins_area1 0.013 0.010
+1 1 sex_t1 ins_area1 -0.053 0.006
+1 1 age_t1 ins_area1 -0.077 0.034
+1 1 icv_t1 ins_area1 1.073 0.021
+1 1 p_edu_t1 ins_area1 -0.005 0.011
+1 1 fc_t1 ins_area1 -0.004 0.001
+1 1 mh_t1 ins_area1 -0.002 0.002
+1 1 coi_t1 acc_area1 0.026 0.010
+1 1 sex_t1 acc_area1 0.006 0.006
+1 1 age_t1 acc_area1 -0.072 0.034
+1 1 icv_t1 acc_area1 1.008 0.020
+1 1 p_edu_t1 acc_area1 0.010 0.012
+1 1 fc_t1 acc_area1 -0.002 0.001
+1 1 mh_t1 acc_area1 -0.003 0.003
+1 1 coi_t1 dlp_area1 0.275 0.079
+1 1 sex_t1 dlp_area1 -0.432 0.044
+1 1 age_t1 dlp_area1 -1.175 0.259
+1 1 icv_t1 dlp_area1 8.407 0.154
+1 1 p_edu_t1 dlp_area1 0.370 0.091
+1 1 fc_t1 dlp_area1 -0.022 0.010
+1 1 mh_t1 dlp_area1 0.009 0.020
+1 1 coi_t1 ifg_area1 0.079 0.022
+1 1 sex_t1 ifg_area1 -0.127 0.013
+1 1 age_t1 ifg_area1 -0.329 0.075
+1 1 icv_t1 ifg_area1 1.789 0.046
+1 1 p_edu_t1 ifg_area1 0.035 0.027
+1 1 fc_t1 ifg_area1 -0.005 0.003
+1 1 mh_t1 ifg_area1 -0.012 0.006
+1 1 ins_area1 ins_area2 0.807 0.009
+1 1 sex_t1 ins_area2 -0.013 0.003
+1 1 age_t1 ins_area2 -0.075 0.019
+1 1 icv_t2 ins_area2 0.223 0.015
+1 1 p_edu_t1 ins_area2 0.009 0.006
+1 1 fc_t1 ins_area2 -0.002 0.0007121608942
+1 1 mh_t1 ins_area2 0.0005080366973 0.001
+1 1 acc_area1 acc_area2 0.970 0.004
+1 1 sex_t1 acc_area2 -0.005 0.002
+1 1 age_t1 acc_area2 -0.077 0.009
+1 1 icv_t2 acc_area2 0.048 0.007
+1 1 p_edu_t1 acc_area2 0.0005983852316 0.003
+1 1 fc_t1 acc_area2 -.0001678729313 0.0003530593531
+1 1 mh_t1 acc_area2 0.0004257285618 0.0007157780346
+1 1 dlp_area1 dlp_area2 0.914 0.006
+1 1 sex_t1 dlp_area2 -0.099 0.017
+1 1 age_t1 dlp_area2 -0.745 0.099
+1 1 icv_t2 dlp_area2 0.976 0.086
+1 1 p_edu_t1 dlp_area2 -0.019 0.030
+1 1 fc_t1 dlp_area2 -0.004 0.004
+1 1 mh_t1 dlp_area2 -0.003 0.007
+1 1 ifg_area1 ifg_area2 0.942 0.004
+1 1 sex_t1 ifg_area2 -0.017 0.004
+1 1 age_t1 ifg_area2 -0.144 0.021
+1 1 icv_t2 ifg_area2 0.177 0.015
+1 1 p_edu_t1 ifg_area2 -0.003 0.007
+1 1 fc_t1 ifg_area2 0.0005152608501 0.0007952369633
+1 1 mh_t1 ifg_area2 -0.002 0.002
+1 1 p_edu_t1 coi_t1 0.562 0.015
+1 1 mh_t1 coi_t1 -0.042 0.004
+1 1 fc_t1 coi_t1 -0.007 0.002
+1 1 icv_t1 icv_t2 0.990 0.003
+2 1 ins_area1 acc_area1 0.008 0.0005174305406
+2 1 ins_area1 dlp_area1 0.086 0.004
+2 1 ins_area1 ifg_area1 0.031 0.001
+2 1 acc_area1 dlp_area1 0.136 0.004
+2 1 acc_area1 ifg_area1 0.023 0.001
+2 1 dlp_area1 ifg_area1 0.276 0.009
+2 1 ins_area2 acc_area2 0.0001047286278 0.0000832854130
+2 1 ins_area2 dlp_area2 0.0005161130684 0.0008366674301
+2 1 ins_area2 ifg_area2 0.0004269773781 0.0001981716778
+2 1 acc_area2 dlp_area2 0.008 0.0006474772235
+2 1 acc_area2 ifg_area2 0.001 0.0001422366768
+2 1 dlp_area2 ifg_area2 0.044 0.003
+2 1 p_edu_t1 mh_t1 -0.077 0.004
+2 1 ga ef 0.0009608176188 0.0000826775213
+4 1 coi_t1 0.063 0.001
+4 1 picvo 0.002 0.0001133292462
+4 1 flanker 0.004 0.0001259850687
+4 1 pattern 0.014 0.0004846308730
+4 1 picture 0.012 0.0002549831988
+4 1 reading 0.002 0.0000700626988
+4 1 icv_t2 0.001 0.0000766673620
+4 1 ins_area1 0.035 0.0008212885587
+4 1 acc_area1 0.036 0.0007454967708
+4 1 dlp_area1 2.168 0.045
+4 1 ifg_area1 0.179 0.004
+4 1 ins_area2 0.012 0.0002449195890
+4 1 acc_area2 0.003 0.0000926894281
+4 1 dlp_area2 0.314 0.013
+4 1 ifg_area2 0.015 0.0008189897635
+4 1 ga 0.003 0.0001205234512
+4 1 ef 0.002 0.0001740936568
+5 1 p_edu_t1 0.064 0.002
+5 1 mh_t1 1.142 0.055
+2 1 icv_t1 age_t1 999.000 999.000
+2 1 icv_t1 sex_t1 999.000 999.000
+2 1 icv_t1 visit_type_t2 999.000 999.000
+2 1 icv_t1 fc_t1 999.000 999.000
+2 1 age_t1 sex_t1 999.000 999.000
+2 1 age_t1 visit_type_t2 999.000 999.000
+2 1 age_t1 fc_t1 999.000 999.000
+2 1 sex_t1 visit_type_t2 999.000 999.000
+2 1 sex_t1 fc_t1 999.000 999.000
+2 1 visit_type_t2 fc_t1 999.000 999.000
+11 1 ga picvo 0.856 0.010
+11 1 ga reading 0.680 0.010
+11 1 ef picture 0.399 0.018
+11 1 ef flanker 0.613 0.016
+11 1 ef pattern 0.617 0.017
+11 1 ins_area2 ga 0.016 0.019
+11 1 acc_area2 ga 0.068 0.018
+11 1 dlp_area2 ga 0.093 0.022
+11 1 ifg_area2 ga 0.062 0.018
+11 1 coi_t1 ga 0.203 0.015
+11 1 sex_t1 ga 0.058 0.014
+11 1 age_t1 ga 0.203 0.013
+11 1 p_edu_t1 ga 0.355 0.014
+11 1 fc_t1 ga -0.051 0.013
+11 1 mh_t1 ga -0.057 0.013
+11 1 visit_type_t2 ga 0.023 0.013
+11 1 ins_area2 ef 0.049 0.024
+11 1 acc_area2 ef 0.052 0.023
+11 1 dlp_area2 ef -0.005 0.027
+11 1 ifg_area2 ef -0.008 0.023
+11 1 coi_t1 ef 0.184 0.020
+11 1 sex_t1 ef 0.098 0.019
+11 1 age_t1 ef 0.213 0.017
+11 1 p_edu_t1 ef 0.162 0.020
+11 1 fc_t1 ef -0.049 0.017
+11 1 mh_t1 ef -0.058 0.018
+11 1 visit_type_t2 ef 0.075 0.017
+11 1 coi_t1 ins_area1 0.015 0.012
+11 1 sex_t1 ins_area1 -0.105 0.011
+11 1 age_t1 ins_area1 -0.023 0.010
+11 1 icv_t1 ins_area1 0.615 0.010
+11 1 p_edu_t1 ins_area1 -0.005 0.012
+11 1 fc_t1 ins_area1 -0.034 0.010
+11 1 mh_t1 ins_area1 -0.007 0.010
+11 1 coi_t1 acc_area1 0.032 0.013
+11 1 sex_t1 acc_area1 0.012 0.012
+11 1 age_t1 acc_area1 -0.022 0.010
+11 1 icv_t1 acc_area1 0.606 0.010
+11 1 p_edu_t1 acc_area1 0.011 0.013
+11 1 fc_t1 acc_area1 -0.018 0.010
+11 1 mh_t1 acc_area1 -0.014 0.011
+11 1 coi_t1 dlp_area1 0.042 0.012
+11 1 sex_t1 dlp_area1 -0.109 0.011
+11 1 age_t1 dlp_area1 -0.044 0.010
+11 1 icv_t1 dlp_area1 0.610 0.010
+11 1 p_edu_t1 dlp_area1 0.047 0.012
+11 1 fc_t1 dlp_area1 -0.022 0.010
+11 1 mh_t1 dlp_area1 0.005 0.011
+11 1 coi_t1 ifg_area1 0.046 0.013
+11 1 sex_t1 ifg_area1 -0.123 0.012
+11 1 age_t1 ifg_area1 -0.047 0.011
+11 1 icv_t1 ifg_area1 0.499 0.012
+11 1 p_edu_t1 ifg_area1 0.017 0.013
+11 1 fc_t1 ifg_area1 -0.018 0.011
+11 1 mh_t1 ifg_area1 -0.024 0.011
+11 1 ins_area1 ins_area2 0.802 0.007
+11 1 sex_t1 ins_area2 -0.025 0.006
+11 1 age_t1 ins_area2 -0.022 0.006
+11 1 icv_t2 ins_area2 0.130 0.009
+11 1 p_edu_t1 ins_area2 0.009 0.006
+11 1 fc_t1 ins_area2 -0.013 0.006
+11 1 mh_t1 ins_area2 0.002 0.006
+11 1 acc_area1 acc_area2 0.956 0.003
+11 1 sex_t1 acc_area2 -0.009 0.003
+11 1 age_t1 acc_area2 -0.023 0.003
+11 1 icv_t2 acc_area2 0.029 0.004
+11 1 p_edu_t1 acc_area2 0.0006259025540 0.003
+11 1 fc_t1 acc_area2 -0.001 0.003
+11 1 mh_t1 acc_area2 0.002 0.003
+11 1 dlp_area1 dlp_area2 0.904 0.005
+11 1 sex_t1 dlp_area2 -0.025 0.004
+11 1 age_t1 dlp_area2 -0.027 0.004
+11 1 icv_t2 dlp_area2 0.071 0.006
+11 1 p_edu_t1 dlp_area2 -0.002 0.004
+11 1 fc_t1 dlp_area2 -0.004 0.004
+11 1 mh_t1 dlp_area2 -0.002 0.004
+11 1 ifg_area1 ifg_area2 0.938 0.003
+11 1 sex_t1 ifg_area2 -0.016 0.004
+11 1 age_t1 ifg_area2 -0.021 0.003
+11 1 icv_t2 ifg_area2 0.050 0.004
+11 1 p_edu_t1 ifg_area2 -0.002 0.003
+11 1 fc_t1 ifg_area2 0.002 0.003
+11 1 mh_t1 ifg_area2 -0.004 0.003
+11 1 p_edu_t1 coi_t1 0.475 0.011
+11 1 mh_t1 coi_t1 -0.149 0.013
+11 1 fc_t1 coi_t1 -0.045 0.011
+11 1 icv_t1 icv_t2 0.969 0.002
+12 1 ins_area1 acc_area1 0.237 0.013
+12 1 ins_area1 dlp_area1 0.313 0.012
+12 1 ins_area1 ifg_area1 0.389 0.012
+12 1 acc_area1 dlp_area1 0.487 0.010
+12 1 acc_area1 ifg_area1 0.283 0.012
+12 1 dlp_area1 ifg_area1 0.443 0.011
+12 1 ins_area2 acc_area2 0.018 0.014
+12 1 ins_area2 dlp_area2 0.008 0.014
+12 1 ins_area2 ifg_area2 0.032 0.015
+12 1 acc_area2 dlp_area2 0.271 0.018
+12 1 acc_area2 ifg_area2 0.223 0.018
+12 1 dlp_area2 ifg_area2 0.635 0.017
+12 1 p_edu_t1 mh_t1 -0.286 0.014
+12 1 ga ef 0.387 0.023
+14 1 coi_t1 0.709 0.011
+14 1 picvo 0.268 0.017
+14 1 flanker 0.625 0.019
+14 1 pattern 0.620 0.020
+14 1 picture 0.841 0.014
+14 1 reading 0.537 0.014
+14 1 icv_t2 0.060 0.004
+14 1 ins_area1 0.553 0.010
+14 1 acc_area1 0.638 0.010
+14 1 dlp_area1 0.554 0.010
+14 1 ifg_area1 0.678 0.010
+14 1 ins_area2 0.188 0.005
+14 1 acc_area2 0.048 0.002
+14 1 dlp_area2 0.078 0.003
+14 1 ifg_area2 0.057 0.003
+14 1 ga 0.642 0.012
+14 1 ef 0.829 0.013
+15 1 p_edu_t1 1.000 0.0000000001000
+15 1 mh_t1 1.000 0.0000000001000
+12 1 icv_t1 age_t1 999.000 999.000
+12 1 icv_t1 sex_t1 999.000 999.000
+12 1 icv_t1 visit_type_t2 999.000 999.000
+12 1 icv_t1 fc_t1 999.000 999.000
+12 1 age_t1 sex_t1 999.000 999.000
+12 1 age_t1 visit_type_t2 999.000 999.000
+12 1 age_t1 fc_t1 999.000 999.000
+12 1 sex_t1 visit_type_t2 999.000 999.000
+12 1 sex_t1 fc_t1 999.000 999.000
+12 1 visit_type_t2 fc_t1 999.000 999.000
+31 1 ga picvo 0.070 0.001
+31 1 ga reading 0.044 0.0009013207164
+31 1 ef picture 0.048 0.002
+31 1 ef flanker 0.046 0.001
+31 1 ef pattern 0.092 0.003
+31 1 ins_area2 ga 0.064 0.075
+31 1 acc_area2 ga 0.281 0.076
+31 1 dlp_area2 ga 0.046 0.011
+31 1 ifg_area2 ga 0.119 0.035
+31 1 coi_t1 ga 0.678 0.051
+31 1 sex_t1 ga 0.116 0.029
+31 1 age_t1 ga 2.750 0.170
+31 1 p_edu_t1 ga 1.406 0.057
+31 1 fc_t1 ga -0.026 0.007
+31 1 mh_t1 ga -0.054 0.012
+31 1 visit_type_t2 ga 0.043 0.024
+31 1 ins_area2 ef 0.195 0.095
+31 1 acc_area2 ef 0.214 0.094
+31 1 dlp_area2 ef -0.003 0.014
+31 1 ifg_area2 ef -0.015 0.045
+31 1 coi_t1 ef 0.617 0.067
+31 1 sex_t1 ef 0.197 0.038
+31 1 age_t1 ef 2.895 0.234
+31 1 p_edu_t1 ef 0.643 0.080
+31 1 fc_t1 ef -0.025 0.009
+31 1 mh_t1 ef -0.055 0.017
+31 1 visit_type_t2 ef 0.140 0.032
+31 1 coi_t1 ins_area1 0.013 0.010
+31 1 sex_t1 ins_area1 -0.053 0.006
+31 1 age_t1 ins_area1 -0.077 0.034
+31 1 icv_t1 ins_area1 1.073 0.021
+31 1 p_edu_t1 ins_area1 -0.005 0.011
+31 1 fc_t1 ins_area1 -0.004 0.001
+31 1 mh_t1 ins_area1 -0.002 0.002
+31 1 coi_t1 acc_area1 0.026 0.010
+31 1 sex_t1 acc_area1 0.006 0.006
+31 1 age_t1 acc_area1 -0.072 0.034
+31 1 icv_t1 acc_area1 1.008 0.020
+31 1 p_edu_t1 acc_area1 0.010 0.012
+31 1 fc_t1 acc_area1 -0.002 0.001
+31 1 mh_t1 acc_area1 -0.003 0.003
+31 1 coi_t1 dlp_area1 0.275 0.079
+31 1 sex_t1 dlp_area1 -0.432 0.044
+31 1 age_t1 dlp_area1 -1.175 0.259
+31 1 icv_t1 dlp_area1 8.407 0.154
+31 1 p_edu_t1 dlp_area1 0.370 0.091
+31 1 fc_t1 dlp_area1 -0.022 0.010
+31 1 mh_t1 dlp_area1 0.009 0.020
+31 1 coi_t1 ifg_area1 0.079 0.022
+31 1 sex_t1 ifg_area1 -0.127 0.013
+31 1 age_t1 ifg_area1 -0.329 0.075
+31 1 icv_t1 ifg_area1 1.789 0.046
+31 1 p_edu_t1 ifg_area1 0.035 0.027
+31 1 fc_t1 ifg_area1 -0.005 0.003
+31 1 mh_t1 ifg_area1 -0.012 0.006
+31 1 ins_area1 ins_area2 0.807 0.009
+31 1 sex_t1 ins_area2 -0.013 0.003
+31 1 age_t1 ins_area2 -0.075 0.019
+31 1 icv_t2 ins_area2 0.223 0.015
+31 1 p_edu_t1 ins_area2 0.009 0.006
+31 1 fc_t1 ins_area2 -0.002 0.0007121608942
+31 1 mh_t1 ins_area2 0.0005080366973 0.001
+31 1 acc_area1 acc_area2 0.970 0.004
+31 1 sex_t1 acc_area2 -0.005 0.002
+31 1 age_t1 acc_area2 -0.077 0.009
+31 1 icv_t2 acc_area2 0.048 0.007
+31 1 p_edu_t1 acc_area2 0.0005983852316 0.003
+31 1 fc_t1 acc_area2 -.0001678729313 0.0003530593531
+31 1 mh_t1 acc_area2 0.0004257285618 0.0007157780346
+31 1 dlp_area1 dlp_area2 0.914 0.006
+31 1 sex_t1 dlp_area2 -0.099 0.017
+31 1 age_t1 dlp_area2 -0.745 0.099
+31 1 icv_t2 dlp_area2 0.976 0.086
+31 1 p_edu_t1 dlp_area2 -0.019 0.030
+31 1 fc_t1 dlp_area2 -0.004 0.004
+31 1 mh_t1 dlp_area2 -0.003 0.007
+31 1 ifg_area1 ifg_area2 0.942 0.004
+31 1 sex_t1 ifg_area2 -0.017 0.004
+31 1 age_t1 ifg_area2 -0.144 0.021
+31 1 icv_t2 ifg_area2 0.177 0.015
+31 1 p_edu_t1 ifg_area2 -0.003 0.007
+31 1 fc_t1 ifg_area2 0.0005152608501 0.0007952369633
+31 1 mh_t1 ifg_area2 -0.002 0.002
+31 1 p_edu_t1 coi_t1 0.562 0.015
+31 1 mh_t1 coi_t1 -0.042 0.004
+31 1 fc_t1 coi_t1 -0.007 0.002
+31 1 icv_t1 icv_t2 0.990 0.003
+32 1 ins_area1 acc_area1 0.008 0.0005174305406
+32 1 ins_area1 dlp_area1 0.086 0.004
+32 1 ins_area1 ifg_area1 0.031 0.001
+32 1 acc_area1 dlp_area1 0.136 0.004
+32 1 acc_area1 ifg_area1 0.023 0.001
+32 1 dlp_area1 ifg_area1 0.276 0.009
+32 1 ins_area2 acc_area2 0.0001047286278 0.0000832854130
+32 1 ins_area2 dlp_area2 0.0005161130684 0.0008366674301
+32 1 ins_area2 ifg_area2 0.0004269773781 0.0001981716778
+32 1 acc_area2 dlp_area2 0.008 0.0006474772235
+32 1 acc_area2 ifg_area2 0.001 0.0001422366768
+32 1 dlp_area2 ifg_area2 0.044 0.003
+32 1 p_edu_t1 mh_t1 -0.077 0.004
+32 1 ga ef 0.387 0.023
+34 1 coi_t1 0.063 0.001
+34 1 picvo 0.002 0.0001133292462
+34 1 flanker 0.004 0.0001259850687
+34 1 pattern 0.014 0.0004846308730
+34 1 picture 0.012 0.0002549831988
+34 1 reading 0.002 0.0000700626988
+34 1 icv_t2 0.001 0.0000766673620
+34 1 ins_area1 0.035 0.0008212885587
+34 1 acc_area1 0.036 0.0007454967708
+34 1 dlp_area1 2.168 0.045
+34 1 ifg_area1 0.179 0.004
+34 1 ins_area2 0.012 0.0002449195890
+34 1 acc_area2 0.003 0.0000926894281
+34 1 dlp_area2 0.314 0.013
+34 1 ifg_area2 0.015 0.0008189897635
+34 1 ga 0.642 0.012
+34 1 ef 0.829 0.013
+35 1 p_edu_t1 0.064 0.002
+35 1 mh_t1 1.142 0.055
+32 1 icv_t1 age_t1 999.000 999.000
+32 1 icv_t1 sex_t1 999.000 999.000
+32 1 icv_t1 visit_type_t2 999.000 999.000
+32 1 icv_t1 fc_t1 999.000 999.000
+32 1 age_t1 sex_t1 999.000 999.000
+32 1 age_t1 visit_type_t2 999.000 999.000
+32 1 age_t1 fc_t1 999.000 999.000
+32 1 sex_t1 visit_type_t2 999.000 999.000
+32 1 sex_t1 fc_t1 999.000 999.000
+32 1 visit_type_t2 fc_t1 999.000 999.000

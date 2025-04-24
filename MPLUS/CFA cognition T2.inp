@@ -1,0 +1,49 @@
+TITLE: SEM to examine indirect effects of brain structure on COI and cognitive function;
+DATA: FILE IS "D:/OneDrive/mplus/input/SEM_vol.csv";
+
+! this file is CFA analysis for the five cognitive function measures at 2 year-follow up
+
+VARIABLE: 
+    NAMES ARE src_subject_id site_id_l_t1 rel_family_id_t1 COI_t1 ICV_t1 ICV_t2 
+    age_t1 age_t2 sex_t1 P_EDU_t1 FC_t1 MH_t1 visit_type_t2 
+    picvo flanker pattern picture reading GE PH scanner vol_t1 vol_t2;
+
+    USEVARIABLES ARE  picvo flanker pattern picture reading 
+    age_t1 sex_t1 visit_type_t2;
+
+                 
+
+MISSING ARE ALL (-999);  ! Specify your missing data code
+
+CLUSTER = rel_family_id_t1;
+STRATIFICATION = site_id_l_t1;
+
+
+ANALYSIS:
+    TYPE = COMPLEX;
+    ESTIMATOR = ML;  ! Use ML or MLR (robust to non-normality)
+ !   BOOTSTRAP = 10000;  ! Bootstrapping for confidence intervals
+
+MODEL:
+  ! Latent factors
+  GA BY picvo reading;
+  EF BY picture flanker pattern;
+
+  GA WITH EF;
+
+ GA ON visit_type_t2;
+  EF ON visit_type_t2;
+
+  GA ON sex_t1;
+ EF ON sex_t1;
+
+  GA ON age_t1;
+  EF ON age_t1;
+
+OUTPUT: 
+  CINTERVAL (BOOTSTRAP);  ! Confidence intervals for indirect effects via bootstrapping
+  STDYX;   ! Standardized estimates
+  TECH1;   ! Parameter specifications
+  TECH4;   ! Latent variable covariances
+  !MODINDICES (ALL);  ! Modification indices for model respecification if needed
+  RESIDUAL;  ! Residuals for model diagnostics

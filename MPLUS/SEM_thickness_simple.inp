@@ -1,0 +1,133 @@
+TITLE: SEM to examine indirect effects of brain structure on COI and cognitive function;
+DATA: FILE IS "D:/OneDrive/mplus/input/SEM_thick.csv";
+
+! this file is SEM for whole-brain thickness
+!src_subject_id site_id_l_t1 rel_family_id_t1 COI_t1 ICV_t1 ICV_t2 age_t1 age_t2 sex_t1 P_EDU_t1 FC_t1 MH_t1 visit_type_t2 picvo flanker pattern picture reading GE PH scanner Ins_thk1 ACC_thk1 DLP_thk1 IFG_thk1 Ins_thk2 ACC_thk2 DLP_thk2 IFG_thk2
+
+
+VARIABLE: 
+    NAMES ARE src_subject_id site_id_l_t1 rel_family_id_t1 COI_t1 ICV_t1 ICV_t2 
+    age_t1 age_t2 sex_t1 P_EDU_t1 FC_t1 MH_t1 visit_type_t2 
+    picvo flanker pattern picture reading GE PH scanner thick_t1 thick_t2;
+
+    USEVARIABLES ARE COI_t1 picvo flanker pattern picture reading ICV_t1 ICV_t2 
+    age_t1 sex_t1 visit_type_t2 P_EDU_t1 FC_t1 MH_t1
+    thick_t1 thick_t2;
+
+                 
+
+MISSING ARE ALL (-999);  ! Specify your missing data code
+
+CLUSTER = rel_family_id_t1;
+STRATIFICATION = site_id_l_t1;
+
+DEFINE:
+    picvo = picvo/100;
+    flanker = flanker/100;
+    pattern = pattern/100;
+    picture = picture/100;
+    reading = reading/100;
+    COI_t1 = COI_t1/100;
+    age_t1 = age_t1/100;
+    ICV_t1 = ICV_t1 / 1000000; ! Rescale the ICV
+    ICV_t2 = ICV_t2 / 1000000;
+    P_EDU_t1 = P_EDU_t1 / 10;
+
+ANALYSIS:
+    TYPE = COMPLEX;
+    ESTIMATOR = ML;  ! Use ML or MLR (robust to non-normality)
+    BOOTSTRAP = 10000;  ! Bootstrapping for confidence intervals
+
+MODEL:
+  ! Latent factors
+  GA BY picvo reading;
+  EF BY picture flanker pattern;
+
+  GA WITH EF;
+
+  ! Direct effects (SEM model)
+
+  !COI_t1 and all family covariates
+  COI_t1 ON P_EDU_t1;
+  COI_t1 ON MH_t1;
+  COI_t1 ON FC_t1;
+
+
+  thick_t1 ON COI_t1;  ! Brain thickness at time 1 predicted by COI
+  !thick_t2 ON COI_t1;  ! Brain thickness at time 2 predicted by COI
+
+  thick_t2 ON thick_t1;  ! Brain thickness at time 2 predicted by t1
+
+  thick_t1 ON sex_t1;  ! thickness t1 predicted by sex at time 1
+  thick_t2 ON sex_t1;  ! thickness t2 predicted by sex at time 2
+
+  thick_t1 ON ICV_t1;  ! thickness t1 predicted by ICV at time 1
+  thick_t2 ON ICV_t2;  ! thickness t2 predicted by ICV at time 2
+
+  thick_t1 ON age_t1;  ! thickness t1 predicted by age at time 1
+  thick_t2 ON age_t1;  ! thickness t2 predicted by age at time 1
+
+  thick_t1 ON P_EDU_t1;  ! thick_t1 predicted by age at time 1
+  thick_t2 ON P_EDU_t1;  ! thick_t2 predicted by age at time 1
+
+  thick_t1 ON FC_t1;  ! thick_t1 predicted by FC at time 1
+  thick_t2 ON FC_t1;  ! thick_t2 predicted by FC at time 1
+
+  thick_t1 ON MH_t1;  ! thick_t1 predicted by MH at time 1
+  thick_t2 ON MH_t1;  ! thick_t2 predicted by MH at time 1
+
+
+
+ ! GA ON thick_t1;  ! GA predicted by brain thickness at time 1
+ ! EF ON thick_t1;  ! EF predicted by brain thickness at time 1
+
+  GA ON thick_t2;  ! GA predicted by brain thickness at time 2
+  EF ON thick_t2;  ! EF predicted by brain thickness at time 2
+
+  GA ON sex_t1;  ! GA predicted by sex at time 1
+  EF ON sex_t1;  ! EF predicted by sex at time 1
+
+  GA ON age_t1;  ! GA predicted by age at time 1
+  EF ON age_t1;  ! EF predicted by age at time 1
+
+  GA ON P_EDU_t1;  ! GA predicted by age at time 1
+  EF ON P_EDU_t1;  ! EF predicted by age at time 1
+
+  GA ON FC_t1;  ! GA predicted by FC at time 1
+  EF ON FC_t1;  ! EF predicted by FC at time 1
+
+  GA ON MH_t1;  ! GA predicted by MH at time 1
+  EF ON MH_t1;  ! EF predicted by MH at time 1
+
+  GA ON visit_type_t2;  ! GA predicted by vist type (in person or hybrid) at time 2
+  EF ON visit_type_t2;  ! EF predicted byvist type (in person or hybrid)  at time 2
+
+  GA ON COI_t1;  ! Direct effect of COI on GA
+  EF ON COI_t1;  ! Direct effect of COI on EF
+
+
+! correlation between variables
+
+  P_EDU_t1 WITH MH_t1;
+  ICV_t2  on ICV_t1;
+
+
+   
+
+   
+
+ 
+
+MODEL INDIRECT:
+  ! Indirect effects
+  GA IND COI_t1;  ! Indirect effect of COI on GA through brain structure (smri_vol_cdk_total_t1)
+  EF IND COI_t1;  ! Indirect effect of COI on EF through brain structure (smri_vol_cdk_total_t1)
+
+OUTPUT: 
+  MODINDICES; 
+  CINTERVAL (BOOTSTRAP);  ! Confidence intervals for indirect effects via bootstrapping
+  STDYX;   ! Standardized estimates
+  TECH1;   ! Parameter specifications
+  TECH4;   ! Latent variable covariances
+  MODINDICES;  ! Modification indices for model respecification if needed
+  RESIDUAL;  ! Residuals for model diagnostics

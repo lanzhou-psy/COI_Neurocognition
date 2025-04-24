@@ -1,0 +1,121 @@
+VERSION 1.1.0
+INPUT
+TITLE:
+ SEM to examine indirect effects of brain structure on COI and cognitive function;
+DATA:
+ FILE IS "D:/OneDrive/mplus/input/SEM_vol.csv";
+VARIABLE:
+    NAMES ARE src_subject_id site_id_l_t1 rel_family_id_t1 COI_t1 ICV_t1 ICV_t2
+    age_t1 age_t2 sex_t1 P_EDU_t1 FC_t1 MH_t1 visit_type_t2
+    picvo flanker pattern picture reading GE PH scanner vol_t1 vol_t2;
+    USEVARIABLES ARE  picvo flanker pattern picture reading
+    age_t1 sex_t1 visit_type_t2;
+MISSING ARE ALL (-999);
+CLUSTER = rel_family_id_t1;
+STRATIFICATION = site_id_l_t1;
+ANALYSIS:
+    TYPE = COMPLEX;
+    ESTIMATOR = ML;
+OUTPUT:
+  CINTERVAL (BOOTSTRAP);
+  STDYX;
+  TECH1;
+  TECH4;
+  RESIDUAL;
+MODEL:
+  GA BY picvo reading;
+  EF BY picture flanker pattern;
+  GA WITH EF;
+ GA ON visit_type_t2;
+  EF ON visit_type_t2;
+  GA ON sex_t1;
+ EF ON sex_t1;
+  GA ON age_t1;
+  EF ON age_t1;
+INPUT_END
+2
+2
+0
+2
+MLR
+1
+GENERAL
+0
+5
+2
+3
+picvo flanker pattern picture reading ga ef age_t1 sex_t1 visit_type_t2
+2
+-1 -1 -1 -1 -1 1 1 0 0 0
+0
+2
+ga
+picvo reading
+ef
+picture flanker pattern
+1 1 ga picvo 1.000 0.000
+1 1 ga reading 0.728 0.026
+1 1 ef picture 1.000 0.000
+1 1 ef flanker 0.993 0.058
+1 1 ef pattern 2.003 0.122
+1 1 visit_type_t2 ga 0.127 0.205
+1 1 sex_t1 ga -0.418 0.205
+1 1 age_t1 ga 0.197 0.014
+1 1 visit_type_t2 ef 0.569 0.155
+1 1 sex_t1 ef 0.592 0.171
+1 1 age_t1 ef 0.144 0.013
+2 1 ga ef 15.337 1.214
+4 1 picvo 25.532 1.538
+4 1 flanker 35.535 1.251
+4 1 pattern 135.667 4.949
+4 1 picture 125.030 2.499
+4 1 reading 18.911 0.928
+4 1 ga 42.071 1.810
+4 1 ef 20.936 2.002
+2 1 age_t1 sex_t1 999.000 999.000
+2 1 age_t1 visit_type_t2 999.000 999.000
+2 1 sex_t1 visit_type_t2 999.000 999.000
+11 1 ga picvo 0.796 0.014
+11 1 ga reading 0.744 0.014
+11 1 ef picture 0.388 0.017
+11 1 ef flanker 0.617 0.016
+11 1 ef pattern 0.629 0.016
+11 1 visit_type_t2 ga 0.010 0.016
+11 1 sex_t1 ga -0.031 0.015
+11 1 age_t1 ga 0.219 0.014
+11 1 visit_type_t2 ef 0.064 0.018
+11 1 sex_t1 ef 0.063 0.018
+11 1 age_t1 ef 0.225 0.018
+12 1 ga ef 0.517 0.021
+14 1 picvo 0.366 0.022
+14 1 flanker 0.619 0.019
+14 1 pattern 0.604 0.021
+14 1 picture 0.849 0.014
+14 1 reading 0.446 0.021
+14 1 ga 0.951 0.006
+14 1 ef 0.944 0.008
+12 1 age_t1 sex_t1 999.000 999.000
+12 1 age_t1 visit_type_t2 999.000 999.000
+12 1 sex_t1 visit_type_t2 999.000 999.000
+31 1 ga picvo 6.652 0.143
+31 1 ga reading 4.843 0.114
+31 1 ef picture 4.709 0.223
+31 1 ef flanker 4.677 0.143
+31 1 ef pattern 9.430 0.278
+31 1 visit_type_t2 ga 0.019 0.031
+31 1 sex_t1 ga -0.063 0.031
+31 1 age_t1 ga 0.030 0.002
+31 1 visit_type_t2 ef 0.121 0.034
+31 1 sex_t1 ef 0.126 0.035
+31 1 age_t1 ef 0.031 0.002
+32 1 ga ef 0.517 0.021
+34 1 picvo 25.532 1.538
+34 1 flanker 35.535 1.251
+34 1 pattern 135.667 4.949
+34 1 picture 125.030 2.499
+34 1 reading 18.911 0.928
+34 1 ga 0.951 0.006
+34 1 ef 0.944 0.008
+32 1 age_t1 sex_t1 999.000 999.000
+32 1 age_t1 visit_type_t2 999.000 999.000
+32 1 sex_t1 visit_type_t2 999.000 999.000
