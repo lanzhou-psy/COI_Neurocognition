@@ -8,7 +8,7 @@ Aim 1: corss-sectional assocations between COI and cognitive function, and brain
 Related codes can be found in the file: ABCD_COI.
 
 Aim 2: The relative contribution of three COI domains to cognitive function and brain structurs at baseline.
-Related codes can be found in the file: ABCD_RWA_analysis
+Related codes can be found in the website: https://www.scotttonidandel.com/rwa-web-instructions
 
 
 Aim 3: The strutural equation models to examine the mediation roles of brain strutures between COI at baseline and cognitive function at 2-year follow-up
